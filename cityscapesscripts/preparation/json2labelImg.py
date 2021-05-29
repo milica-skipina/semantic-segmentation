@@ -25,7 +25,7 @@ from PIL import ImageDraw
 
 # cityscapes imports
 from cityscapesscripts.helpers.annotation import Annotation
-from cityscapesscripts.helpers.labels     import name2label
+from cityscapesscripts.helpers.labels     import name2label, id2label
 
 # Print the information
 def printHelp():
@@ -58,6 +58,9 @@ def createLabelImage(annotation, encoding, outline=None):
         background = name2label['unlabeled'].trainId
     elif encoding == "color":
         background = name2label['unlabeled'].color
+    elif encoding == "categoryId":
+        background = name2label['unlabeled'].categoryId
+
     else:
         print("Unknown encoding '{}'".format(encoding))
         return None
@@ -92,12 +95,20 @@ def createLabelImage(annotation, encoding, outline=None):
         if name2label[label].id < 0:
             continue
 
+        # If the category ID is not human, vehicle or object, that polygon should not be drawn
+        if label not in ['car', 'human', 'object']:
+            continue
+
+        from random import random
         if encoding == "ids":
             val = name2label[label].id
         elif encoding == "trainIds":
             val = name2label[label].trainId
         elif encoding == "color":
             val = name2label[label].color
+        elif encoding == "categoryId":
+            val = name2label[label].categoryId
+            val = val * random(255)
 
         try:
             if outline:
@@ -144,17 +155,18 @@ def main(argv):
         printError( "Missing input json file" )
     elif len(args) == 1:
         printError( "Missing output image filename" )
-    elif len(args) > 2:
+    elif len(args) > 3:
         printError( "Too many arguments" )
 
     inJson = args[0]
     outImg = args[1]
+    type = args[2]
 
     if trainIds:
-        json2labelImg( inJson , outImg , "trainIds" )
+        json2labelImg( inJson , outImg , type)
     else:
         json2labelImg( inJson , outImg )
 
 # call the main method
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main(['/home/djordje/Desktop/Master/Neuronske/NN/data/raw/gtFine/train/aachen/aachen_000015_000019_gtFine_polygons.json', 'test.png', 'categoryId'])

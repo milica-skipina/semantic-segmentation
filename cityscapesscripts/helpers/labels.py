@@ -169,14 +169,14 @@ if __name__ == "__main__":
 
     # Map from name to label
     name = 'car'
-    id   = name2label[name].id
-    print("ID of label '{name}': {id}".format( name=name, id=id ))
+    id = name2label[name].id
+    print("ID of label '{name}': {id}".format(name=name, id=id))
 
     # Map from ID to label
     category = id2label[id].category
-    print("Category of label with ID '{id}': {category}".format( id=id, category=category ))
+    print("Category of label with ID '{id}': {category}".format(id=id, category=category))
 
     # Map from trainID to label
     trainId = 0
     name = trainId2label[trainId].name
-    print("Name of label with trainID '{id}': {name}".format( id=trainId, name=name ))
+    print("Name of label with trainID '{id}': {name}".format(id=trainId, name=name))
