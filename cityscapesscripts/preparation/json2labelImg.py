@@ -96,10 +96,10 @@ def createLabelImage(annotation, encoding, outline=None):
             continue
 
         # If the category ID is not human, vehicle or object, that polygon should not be drawn
-        if label not in ['car', 'human', 'object']:
+        if name2label[label].categoryId not in [6, 7, 3]:
             continue
 
-        from random import random
+        from random import randint
         if encoding == "ids":
             val = name2label[label].id
         elif encoding == "trainIds":
@@ -108,9 +108,15 @@ def createLabelImage(annotation, encoding, outline=None):
             val = name2label[label].color
         elif encoding == "categoryId":
             val = name2label[label].categoryId
-            val = val * random(255)
 
         try:
+            # check
+            '''if val == 7:
+                val = 128
+            elif val == 3:
+                val = 56
+            elif val == 6:
+                val = 245'''
             if outline:
                 drawer.polygon( polygon, fill=val, outline=outline )
             else:
@@ -128,7 +134,7 @@ def createLabelImage(annotation, encoding, outline=None):
 #     - "ids"      : classes are encoded using the regular label IDs
 #     - "trainIds" : classes are encoded using the training IDs
 #     - "color"    : classes are encoded using the corresponding colors
-def json2labelImg(inJson,outImg,encoding="ids"):
+def json2labelImg(inJson,outImg,encoding=None):
     annotation = Annotation()
     annotation.fromJsonFile(inJson)
     labelImg   = createLabelImage( annotation , encoding )
@@ -163,10 +169,10 @@ def main(argv):
     type = args[2]
 
     if trainIds:
-        json2labelImg( inJson , outImg , type)
+        json2labelImg(inJson, outImg, type)
     else:
-        json2labelImg( inJson , outImg )
+        json2labelImg(inJson, outImg, type)
 
 # call the main method
 if __name__ == "__main__":
-    main(['/home/djordje/Desktop/Master/Neuronske/NN/data/raw/gtFine/train/aachen/aachen_000015_000019_gtFine_polygons.json', 'test.png', 'categoryId'])
+    main(['/home/djordje/Desktop/Master/Neuronske/NN/data/raw/gtFine/train/tubingen/tubingen_000122_000019_gtFine_polygons.json', 'test.png', 'categoryId'])
