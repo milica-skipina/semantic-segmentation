@@ -175,4 +175,4 @@ def main(argv):
 
 # call the main method
 if __name__ == "__main__":
-    main(['/home/djordje/Desktop/Master/Neuronske/NN/data/raw/gtFine/train/tubingen/tubingen_000122_000019_gtFine_polygons.json', 'test.png', 'categoryId'])
+    main(['../../data/raw/gtFine/train/tubingen/tubingen_000122_000019_gtFine_polygons.json', 'test.png', 'categoryId'])

@@ -1,5 +1,3 @@
-from data_loader.data_loader import Dataset
+from data_loader.data_loader import DataLoader
 
-dataset = Dataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train')
-x, y = dataset.load_data()
-
+dataset = DataLoader('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train')
