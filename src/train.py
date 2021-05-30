@@ -142,3 +142,5 @@ if __name__ == '__main__':
     print(args)
 
     run(args)
+
+    dataset = DataLoader('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train')
