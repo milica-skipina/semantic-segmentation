@@ -7,11 +7,11 @@ class AutoEncoder(nn.Module):
     def __init__(self, x, y, d):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(x * y, d),
+            nn.Linear(x * y * 3, d),
             nn.Tanh(),
         )
         self.decoder = nn.Sequential(
-            nn.Linear(d, x * y),
+            nn.Linear(d, x * y * 3),
             nn.Tanh(),
         )
 

@@ -1,4 +1,6 @@
 import os
+import random
+
 from PIL import Image
 import matplotlib.pyplot as plt
 from cityscapesscripts.preparation.json2labelImg import createLabelImage
@@ -17,7 +19,9 @@ class CityscapesDataset(Dataset):
         return len(self.images_paths)
 
     def transform(self, image):
-        transform = transforms.Compose([transforms.ToTensor()])
+        transform = transforms.Compose([
+            transforms.ToTensor()]
+        )
         return transform(image)
 
     def __getitem__(self, idx):
@@ -27,10 +31,18 @@ class CityscapesDataset(Dataset):
         annotation = Annotation()
         annotation.fromJsonFile(label_path)
         label = createLabelImage(annotation, 'categoryId')
-        plt.imshow(image)
-        plt.show()
-        plt.imshow(label)
-        plt.show()
+        # random crop
+        x = random.randint(0, image.size[0] - 256)
+        y = random.randint(0, image.size[1] - 256)
+
+        image = image.crop((x, y, x + 256, y + 256))
+        label = label.crop((x, y, x + 256, y + 256))
+
+        # plt.imshow(image)
+        # plt.show()
+        # plt.imshow(label)
+        # plt.show()
+
         if self.transform:
             image = self.transform(image)
             label = self.transform(label)
@@ -56,4 +68,4 @@ class CityscapesDataset(Dataset):
         images_paths = sorted(images_paths)
         labels_paths = sorted(labels_paths)
 
-        return images_paths, labels_paths
+        return images_paths[:5], labels_paths[:5]

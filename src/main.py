@@ -13,6 +13,14 @@ from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
+from torchvision import transforms
+
+# seeds
+torch.backends.cudnn.benchmark = True
+np.random.seed(1)
+torch.manual_seed(1)
+torch.cuda.manual_seed(1)
+
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ROOT = '../'
@@ -21,35 +29,37 @@ ROOT = '../'
 def prepare_data():
 
     train_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train'),
-                              batch_size=64, shuffle=True, pin_memory=True, drop_last=False
+                              batch_size=2, shuffle=True, pin_memory=True, drop_last=False
                               )
     test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train'),
-                             batch_size=64, shuffle=True, pin_memory=True, drop_last=False
+                             batch_size=2, shuffle=True, pin_memory=True, drop_last=False
                              )
 
     return train_loader, test_loader
 
 
-def capture_snapshot(dir, img, noise, output, epoch):
+def to_img(y):
+    y = y.view(3, 256, 256)
+    return y
+
+
+def capture_snapshot(dir, img, output, epoch):
     """Captures and saves checkpoint model output images during training
 
     Args:
         dir: directory where image should be saved
         img: input image
         output: output
-        noise: noise
         epoch: epoch
 
     Returns:
         Figure containing ground truth and predicted images
     """
 
-    predictions = output.data.cpu().numpy().astype(float)
-    for idx, prediction in enumerate(predictions):
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-        ax1.imshow(img[idx])
-        ax2.imshow(noise[idx])
-        ax3.imshow(prediction)
+    for idx, prediction in enumerate(output):
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        ax1.imshow(transforms.ToPILImage()(to_img(img[idx].cpu().data)))
+        ax2.imshow(transforms.ToPILImage()(to_img(output[idx].cpu().data)))
         plt.savefig(dir + '/{}_{}.png'.format(epoch, idx))
         plt.close()
         #plt.show()
@@ -57,7 +67,7 @@ def capture_snapshot(dir, img, noise, output, epoch):
 
 
 def init_model():
-    net = AutoEncoder(1, 2, 3)
+    net = AutoEncoder(256, 256, 400)
     net = nn.DataParallel(net)
     net.to(DEVICE)
     print('Model loaded.')
@@ -98,14 +108,12 @@ def run(args):
         start_time = time.time()
 
         for batch_idx, (image, gt) in pbar:
-            img = img.to(DEVICE)
-            img = img.view(img.size(0), -1)
-            noise = nn.Dropout(torch.ones(img.shape)).to(DEVICE)
-            img_noise = (img * noise).to(DEVICE)
+            image = image.to(DEVICE)
+            img = image.view(image.size(0), -1)
 
             prepare_time = start_time - time.time()
             # FORWARD
-            output = model(img_noise)
+            output = model(img)
             loss = criterion(output, img.data)
             # BACKWARD
             optimizer.zero_grad()
@@ -128,7 +136,7 @@ def run(args):
 
         if train_loss < min_train_loss:
             min_train_loss = train_loss
-            figure = capture_snapshot(save_dir + '/images', img, img_noise, output, epoch)
+            figure = capture_snapshot(save_dir + '/images', image, output, epoch)
             writer.add_figure('figure/min_train_loss', figure, epoch)
 
     print('time elapsed: {:.3f}'.format(time.time() - start))
