@@ -3,18 +3,18 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from cityscapesscripts.preparation.json2labelImg import createLabelImage
 from cityscapesscripts.helpers.annotation import Annotation
-import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 
-class DataLoader(Dataset):
+
+class CityscapesDataset(Dataset):
     def __init__(self, data_path=None, labeled_data_path=None, transform=None, target_transform=None):
         self.data_path = data_path
         self.labeled_data_path = labeled_data_path
         self.images_paths, self.labels_paths = self.load_data()
 
     def __len__(self):
-        return len(self.img_labels)
+        return len(self.images_paths)
 
     def transform(self, image):
         transform = transforms.Compose([transforms.ToTensor()])
@@ -27,6 +27,10 @@ class DataLoader(Dataset):
         annotation = Annotation()
         annotation.fromJsonFile(label_path)
         label = createLabelImage(annotation, 'categoryId')
+        plt.imshow(image)
+        plt.show()
+        plt.imshow(label)
+        plt.show()
         if self.transform:
             image = self.transform(image)
             label = self.transform(label)

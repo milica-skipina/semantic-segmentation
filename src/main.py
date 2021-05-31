@@ -1,25 +1,33 @@
-from data_loader.data_loader import Dataset
+from data_loader.cityscapes_dataset import CityscapesDataset
 import os
 import argparse
 from model.autoencoder import AutoEncoder
 from torch import nn
 import torch
 import time
-import datetime
+from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim import Adam
 from torch.nn import MSELoss
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
+from torch.utils.data import DataLoader
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ROOT = '../'
 
 
 def prepare_data():
-    # TODO load images and return data loaders
-    return None, None
+
+    train_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train'),
+                              batch_size=64, shuffle=True, pin_memory=True, drop_last=False
+                              )
+    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train'),
+                             batch_size=64, shuffle=True, pin_memory=True, drop_last=False
+                             )
+
+    return train_loader, test_loader
 
 
 def capture_snapshot(dir, img, noise, output, epoch):
@@ -49,7 +57,7 @@ def capture_snapshot(dir, img, noise, output, epoch):
 
 
 def init_model():
-    net = AutoEncoder()
+    net = AutoEncoder(1, 2, 3)
     net = nn.DataParallel(net)
     net.to(DEVICE)
     print('Model loaded.')
@@ -58,7 +66,7 @@ def init_model():
     return net
 
 
-def run():
+def run(args):
     model = init_model()
     train_loader, val_loader = prepare_data()
 
@@ -142,5 +150,3 @@ if __name__ == '__main__':
     print(args)
 
     run(args)
-
-    dataset = DataLoader('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train')
