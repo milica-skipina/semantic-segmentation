@@ -1,6 +1,7 @@
 import os
 import random
 
+import torch.utils.data
 from PIL import Image
 import matplotlib.pyplot as plt
 from cityscapesscripts.preparation.json2labelImg import createLabelImage
@@ -9,25 +10,52 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 
+def load_data(data_path, labeled_data_path):
+    images_paths = []
+    labels_paths = []
+    for subdir, dirs, files in os.walk(data_path):
+        for file in files:
+            if file.endswith('.png'):
+                image_path = os.path.join(subdir, file)
+                images_paths.append(image_path)
+
+    for subdir, dirs, files in os.walk(labeled_data_path):
+        for file in files:
+            if file.endswith('.json'):
+                json_file_path = os.path.join(subdir, file)
+                labels_paths.append(json_file_path)
+
+    images_paths = sorted(images_paths)
+    labels_paths = sorted(labels_paths)
+
+    return images_paths[:5], labels_paths[:5]
+
+
 class CityscapesDataset(Dataset):
-    def __init__(self, data_path=None, labeled_data_path=None, transform=None, target_transform=None):
+    def __init__(self, data_path: str, labeled_data_path: str, dataset_len: int, transform: bool):
         self.data_path = data_path
         self.labeled_data_path = labeled_data_path
-        self.images_paths, self.labels_paths = self.load_data()
+        self.images_paths, self.labels_paths = load_data(data_path, labeled_data_path)
+        self.transform = transform
+        self.data_len = len(self.images_paths)
+        self.len = dataset_len
+
+    @staticmethod
+    def transform_image(image, ground_truth):
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+        ])
+        return transform(image), transform(ground_truth)
 
     def __len__(self):
-        return len(self.images_paths)
-
-    def transform(self, image):
-        transform = transforms.Compose([
-            transforms.ToTensor()]
-        )
-        return transform(image)
+        return self.len
 
     def __getitem__(self, idx):
-        image_path = self.images_paths[idx]
+        data_idx = idx % self.data_len
+        print('index {}, data_idx {}'.format(idx, data_idx))
+        image_path = self.images_paths[data_idx]
         image = Image.open(image_path)
-        label_path = self.labels_paths[idx]
+        label_path = self.labels_paths[data_idx]
         annotation = Annotation()
         annotation.fromJsonFile(label_path)
         label = createLabelImage(annotation, 'categoryId')
@@ -44,28 +72,20 @@ class CityscapesDataset(Dataset):
         # plt.show()
 
         if self.transform:
-            image = self.transform(image)
-            label = self.transform(label)
-        # if self.target_transform:
-        #     label = self.target_transform(label)
+            image, label = self.transform_image(image, label)
+
         return image, label
 
-    def load_data(self):
-        images_paths = []
-        labels_paths = []
-        for subdir, dirs, files in os.walk(self.data_path):
-            for file in files:
-                if file.endswith('.png'):
-                    image_path = os.path.join(subdir, file)
-                    images_paths.append(image_path)
 
-        for subdir, dirs, files in os.walk(self.labeled_data_path):
-            for file in files:
-                if file.endswith('.json'):
-                    json_file_path = os.path.join(subdir, file)
-                    labels_paths.append(json_file_path)
+if __name__ == '__main__':
+    loader = torch.utils.data.DataLoader(CityscapesDataset('../../data/raw/leftImg8bit/train',
+                                                           '../../data/raw/gtFine/train',
+                                                           dataset_len=20, transform=True), batch_size=2)
 
-        images_paths = sorted(images_paths)
-        labels_paths = sorted(labels_paths)
+    for batch_id, (img, gt) in enumerate(loader):
+        print(img.shape)
+        print(gt.shape)
+        print('\n')
 
-        return images_paths[:5], labels_paths[:5]
+    print(len(loader))
+
