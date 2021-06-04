@@ -48,14 +48,14 @@ class CityscapesDataset(Dataset):
         return transform(image), transform(ground_truth)
 
     def __len__(self):
-        return self.len
+        return self.data_len
 
     def __getitem__(self, idx):
-        data_idx = idx % self.data_len
-        print('index {}, data_idx {}'.format(idx, data_idx))
-        image_path = self.images_paths[data_idx]
+        #data_idx = idx % self.data_len
+        #print('index {}, data_idx {}'.format(idx, data_idx))
+        image_path = self.images_paths[idx]
         image = Image.open(image_path)
-        label_path = self.labels_paths[data_idx]
+        label_path = self.labels_paths[idx]
         annotation = Annotation()
         annotation.fromJsonFile(label_path)
         label = createLabelImage(annotation, 'categoryId')

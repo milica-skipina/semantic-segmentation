@@ -1,7 +1,7 @@
 from data_loader.cityscapes_dataset import CityscapesDataset
 import os
 import argparse
-from model.autoencoder import AutoEncoder
+from model.vae import VAE, final_loss
 from torch import nn
 import torch
 import time
@@ -14,6 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision import transforms
+import torch.nn.functional as F
 
 # seeds
 torch.backends.cudnn.benchmark = True
@@ -28,10 +29,12 @@ ROOT = '../'
 
 def prepare_data():
 
-    train_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train'),
+    train_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train',
+                                                dataset_len=10, transform=True),
                               batch_size=2, shuffle=True, pin_memory=True, drop_last=False
                               )
-    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train'),
+    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train',
+                                               dataset_len=10, transform=True),
                              batch_size=2, shuffle=True, pin_memory=True, drop_last=False
                              )
 
@@ -67,7 +70,10 @@ def capture_snapshot(dir, img, output, epoch):
 
 
 def init_model():
-    net = AutoEncoder(256, 256, 400)
+    #net = AutoEncoder(256, 256, 400)
+    #
+    net = VAE()
+    #net = ResUNetSimple(in_channels=3, out_classes=3)
     net = nn.DataParallel(net)
     net.to(DEVICE)
     print('Model loaded.')
@@ -108,13 +114,16 @@ def run(args):
         start_time = time.time()
 
         for batch_idx, (image, gt) in pbar:
-            image = image.to(DEVICE)
-            img = image.view(image.size(0), -1)
+            img = image.to(DEVICE)
+            gt = gt.to(DEVICE)
 
             prepare_time = start_time - time.time()
             # FORWARD
-            output = model(img)
-            loss = criterion(output, img.data)
+            output, mu, logvar = model(img)
+            bce_loss = F.mse_loss(output, img, reduction='sum')
+            loss = final_loss(bce_loss, mu, logvar)
+
+            #loss = criterion(output, img.data)
             # BACKWARD
             optimizer.zero_grad()
             loss.backward()
@@ -136,8 +145,9 @@ def run(args):
 
         if train_loss < min_train_loss:
             min_train_loss = train_loss
-            figure = capture_snapshot(save_dir + '/images', image, output, epoch)
+            figure = capture_snapshot(save_dir + '/images', img, output, epoch)
             writer.add_figure('figure/min_train_loss', figure, epoch)
+            #torch.save(model.module.state_dict(), save_dir + '/models/' + str(epoch) + '_best_ae_ever.pth')
 
     print('time elapsed: {:.3f}'.format(time.time() - start))
     del model
