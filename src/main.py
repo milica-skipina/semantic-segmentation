@@ -1,7 +1,6 @@
 from data_loader.cityscapes_dataset import CityscapesDataset
 import os
 import argparse
-from model.autoencoder import AutoEncoder
 from torch import nn
 import torch
 import time
@@ -15,7 +14,12 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
+from src.model.autoencoder import AutoEncoder
+from src.model.myAutoEncoder import Autoencoder
+
 # seeds
+from src.model.convAutoencoder import ConvAutoencoder
+
 torch.backends.cudnn.benchmark = True
 np.random.seed(1)
 torch.manual_seed(1)
@@ -27,12 +31,10 @@ ROOT = '../'
 
 
 def prepare_data():
-
-    train_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train'),
-                              batch_size=2, shuffle=True, pin_memory=True, drop_last=False
-                              )
-    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train'),
-                             batch_size=2, shuffle=True, pin_memory=True, drop_last=False
+    train_dataset = CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train')
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, pin_memory=True, drop_last=True)
+    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/val', '../data/raw/gtFine/val'),
+                             batch_size=64, shuffle=True, pin_memory=True, drop_last=True
                              )
 
     return train_loader, test_loader
@@ -65,14 +67,24 @@ def capture_snapshot(dir, img, output, epoch):
         #plt.show()
         return fig
 
+from pl_bolts.models.autoencoders import AE
 
 def init_model():
-    net = AutoEncoder(256, 256, 400)
+    # net = AutoEncoder(256, 256, 400)
+    # net = Autoencoder()
+    net = ConvAutoencoder()
     net = nn.DataParallel(net)
     net.to(DEVICE)
     print('Model loaded.')
     print('Number of model parameters:\t{}'.format(sum([p.data.nelement() for p in net.parameters()])))
+    # model = ConvAutoencoder()
 
+    # ae = AE(input_height=256)
+    # print(AE.pretrained_weights_available())
+    # ae = ae.from_pretrained('cifar10-resnet18')
+    # ae.freeze()
+    # ae = nn.DataParallel(ae)
+    # ae.to(DEVICE)
     return net
 
 
@@ -108,13 +120,14 @@ def run(args):
         start_time = time.time()
 
         for batch_idx, (image, gt) in pbar:
+            temp = image
             image = image.to(DEVICE)
             img = image.view(image.size(0), -1)
-
+            img = image
             prepare_time = start_time - time.time()
             # FORWARD
             output = model(img)
-            loss = criterion(output, img.data)
+            loss = criterion(output, img)
             # BACKWARD
             optimizer.zero_grad()
             loss.backward()
@@ -139,6 +152,7 @@ def run(args):
             figure = capture_snapshot(save_dir + '/images', image, output, epoch)
             writer.add_figure('figure/min_train_loss', figure, epoch)
 
+
     print('time elapsed: {:.3f}'.format(time.time() - start))
     del model
     writer.close()
@@ -149,9 +163,9 @@ if __name__ == '__main__':
 
     # ARGUMENT PARSING
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=200)
+    parser.add_argument('--epochs', type=int, default=500)
     parser.add_argument('-lr', '--learning-rate', type=float, default=3e-4)
-    parser.add_argument('--batch-size', type=int, default=2)
+    parser.add_argument('--batch-size', type=int, default=20)
     parser.add_argument('--optimizer-step-size', type=int, default=10)
     parser.add_argument('--optimizer-gamma', type=float, default=0.5)
     args = parser.parse_args()
