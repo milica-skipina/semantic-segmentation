@@ -56,7 +56,7 @@ class ConvAutoencoder(nn.Module):
             nn.ConvTranspose2d(512, 256, 5, stride=3, output_padding=1), # N, 84, 84
             nn.ReLU(),
             nn.ConvTranspose2d(256, 3, 7, stride=3), # N, 256, 256
-            nn.Tanh()
+            nn.Sigmoid()
         )
 
     def forward(self, x):

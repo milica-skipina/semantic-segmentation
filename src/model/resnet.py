@@ -80,16 +80,92 @@ import time
 import os
 import copy
 
-from src.main import prepare_data
+import torch
+from torch import nn
+from torch.nn import functional as F
 
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+from pl_bolts.models.autoencoders import AE
 
-train_loader, val_loader = prepare_data()
+class ResnetEncoder(nn.Module):
+    def __init__(self, input_height):
+        super().__init__()
+        # 256, 256
+        # self.layer = nn.Sequential(
+        #     nn.Conv2d(3, 3, 33, stride=1) # N, 224, 224
+        # )
+        # self.encoder = nn.Sequential(
+        #     nn.Conv2d(3, 256, 7, stride=3), # N, 84, 84
+        #     nn.ReLU(),
+        #     nn.Conv2d(256, 512, 5, stride=3), # N, 27, 27
+        #     nn.ReLU(),
+        #     nn.Conv2d(512, 512, 3, stride=2), # N, 12, 12
+        #     nn.ReLU(),
+        #     nn.Conv2d(512, 256, 12), # 256, 1, 1
+        # )
+        # # 256, 1, 1
+        # self.decoder = nn.Sequential(
+        #     nn.ConvTranspose2d(256, 512, 12), # N, 12, 12
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(512, 512, 3, stride=2), # N, 27, 27
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(512, 256, 5, stride=3, output_padding=1), # N, 84, 84
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(256, 3, 7, stride=3), # N, 256, 256
+        #     nn.Tanh()
+        # )
+        # ae = AE(input_height=input_height, enc_out_dim=256)
+        # ae = ae.from_pretrained('cifar10-resnet18')
+        # ae.freeze()
+        # self.ae = ae
+        # self.conv = nn.Sequential(
+        #     nn.ConvTranspose2d(3, 128, 2, stride=2),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(128, 512, 2, stride=2),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(512, 3, 2, stride=2),
+        #     nn.Sigmoid()
+        # )
+        ae = AE(input_height=256)
+        print(AE.pretrained_weights_available())
+        ae = ae.from_pretrained('cifar10-resnet18')
+        for name, param in ae.named_parameters():
+            if param.requires_grad and 'encoder' in name:
+                param.requires_grad = False
+        ae.decoder.conv1 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=(1, 1), bias=False),
+            nn.ReLU(),
+            nn.UpsamplingBilinear2d(scale_factor=(4, 4)),
+            nn.Conv2d(128, 256, 1),
+            nn.ReLU(),
+            nn.UpsamplingBilinear2d(scale_factor=(2, 2)),
+            nn.Conv2d(256, 3, 1),
+            nn.Sigmoid()
+        )
+        for name, param in ae.named_parameters():
+            if param.requires_grad and 'encoder' in name:
+                param.requires_grad = False
+        self.ae = ae
 
-model = models.resnet18(pretrained=True)
-for params in model.parameters():
-    params.requires_grad = False
-num_ftrs = model.fc.in_features
 
-model.fc = nn.Linear(num_ftrs, 2)
-model.to(DEVICE)
+    def forward(self, x):
+        x = self.ae(x)
+        # x = self.conv(x)
+
+        # x = self.upsampling(x) # 128
+        # x = self.upsampling(x) # 256
+        return x
+
+
+# from src.main import prepare_data
+#
+# DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#
+# train_loader, val_loader = prepare_data()
+#
+# model = models.resnet18(pretrained=True)
+# for params in model.parameters():
+#     params.requires_grad = False
+# num_ftrs = model.fc.in_features
+#
+# model.fc = nn.Linear(num_ftrs, 2)
+# model.to(DEVICE)

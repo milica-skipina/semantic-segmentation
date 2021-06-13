@@ -68,4 +68,4 @@ class CityscapesDataset(Dataset):
         images_paths = sorted(images_paths)
         labels_paths = sorted(labels_paths)
 
-        return images_paths[:5], labels_paths[:5]
+        return images_paths[:200], labels_paths[:200]
