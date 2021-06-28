@@ -8,6 +8,7 @@ from cityscapesscripts.preparation.json2labelImg import createLabelImage
 from cityscapesscripts.helpers.annotation import Annotation
 from torch.utils.data import Dataset
 from torchvision import transforms
+import numpy as np
 
 
 def load_data(data_path, labeled_data_path):
@@ -45,17 +46,19 @@ class CityscapesDataset(Dataset):
         transform = transforms.Compose([
             transforms.ToTensor(),
         ])
-        return transform(image), transform(ground_truth)
+
+        ground_truth = torch.from_numpy(np.array(ground_truth, dtype=np.uint8)).long()
+        return transform(image), ground_truth
 
     def __len__(self):
-        return self.data_len
+        return self.len
 
     def __getitem__(self, idx):
-        #data_idx = idx % self.data_len
-        #print('index {}, data_idx {}'.format(idx, data_idx))
-        image_path = self.images_paths[idx]
+        data_idx = idx % self.data_len
+        # print('index {}, data_idx {}'.format(idx, data_idx))
+        image_path = self.images_paths[data_idx]
         image = Image.open(image_path)
-        label_path = self.labels_paths[idx]
+        label_path = self.labels_paths[data_idx]
         annotation = Annotation()
         annotation.fromJsonFile(label_path)
         label = createLabelImage(annotation, 'categoryId')
