@@ -1,20 +1,22 @@
-from data_loader.cityscapes_dataset import CityscapesDataset
-import os
 import argparse
-from model.vae import VAE, final_loss
-from torch import nn
-import torch
+import os
 import time
 from datetime import datetime
-from torch.utils.tensorboard import SummaryWriter
-from torch.optim import Adam
-from torch.nn import MSELoss
-from tqdm import tqdm
-import numpy as np
+
 import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader
-from torchvision import transforms
+import numpy as np
+import torch
 import torch.nn.functional as F
+import torch.optim as optim
+from torch import nn
+from torch.optim import Adam
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
+from tqdm import tqdm
+
+from data_loader.cityscapes_dataset import CityscapesDataset
+from model.resnet import ResNet50
 
 # seeds
 torch.backends.cudnn.benchmark = True
@@ -30,12 +32,12 @@ ROOT = '../'
 def prepare_data():
 
     train_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train',
-                                                dataset_len=10, transform=True),
-                              batch_size=2, shuffle=True, pin_memory=True, drop_last=False
+                                                dataset_len=1, transform=True),
+                              batch_size=1, shuffle=True, pin_memory=True, drop_last=False
                               )
-    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train',
-                                               dataset_len=10, transform=True),
-                             batch_size=2, shuffle=True, pin_memory=True, drop_last=False
+    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/val', '../data/raw/gtFine/val',
+                                               dataset_len=1, transform=True),
+                             batch_size=1, shuffle=True, pin_memory=True, drop_last=False
                              )
 
     return train_loader, test_loader
@@ -69,10 +71,13 @@ def capture_snapshot(dir, img, output, epoch):
         return fig
 
 
-def init_model():
+def init_model(is_autoencoder=False):
     #net = AutoEncoder(256, 256, 400)
     #
-    net = VAE()
+    if is_autoencoder:
+        net = ResNet50(out_classes=3, is_autoencoder=True)
+    else:
+        net = ResNet50(out_classes=8, is_autoencoder=False)
     #net = ResUNetSimple(in_channels=3, out_classes=3)
     net = nn.DataParallel(net)
     net.to(DEVICE)
@@ -82,8 +87,21 @@ def init_model():
     return net
 
 
+class VAELoss:
+    def __init__(self):
+        pass
+
+    def __call__(self, img, output, mu, logvar):
+        """Adds the reconstruction loss and KL-Divergence.
+        KL-Divergence = 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+        """
+        mse_loss = F.mse_loss(img, output)
+        kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return mse_loss + kld
+
+
 def run(args):
-    model = init_model()
+    model = init_model(args.is_autoencoder)
     train_loader, val_loader = prepare_data()
 
     start = time.time()
@@ -99,9 +117,15 @@ def run(args):
     writer.add_text('hyperparameters/', str(vars(args)))
 
     optimizer = Adam(model.parameters(), lr=args.learning_rate)
-    # TODO scheduler if needed
-    criterion = MSELoss()
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.optimizer_step_size, gamma=args.optimizer_gamma)
 
+    if args.is_autoencoder:
+        criterion = VAELoss()
+    else:
+        #weight = torch.tensor([0.4, 0.4, 1, 1, 1])
+        criterion = nn.CrossEntropyLoss(ignore_index=0)
+
+    min_val_loss = np.inf
     min_train_loss = np.inf
 
     print('Training loop started.')
@@ -119,11 +143,13 @@ def run(args):
 
             prepare_time = start_time - time.time()
             # FORWARD
-            output, mu, logvar = model(img)
-            bce_loss = F.mse_loss(output, img, reduction='sum')
-            loss = final_loss(bce_loss, mu, logvar)
+            if args.is_autoencoder:
+                output, mu, logvar = model(img)
+                loss = criterion(img, output, mu, logvar)
+            else:
+                output = model(img)
+                loss = criterion(output, gt.squeeze(dim=1))
 
-            #loss = criterion(output, img.data)
             # BACKWARD
             optimizer.zero_grad()
             loss.backward()
@@ -134,8 +160,8 @@ def run(args):
             process_time = start_time - time.time()
             compute_efficiency = process_time/(process_time+prepare_time)
             pbar.set_description(
-                f'train loss: {train_loss/(batch_idx+1):.4f}, '
                 f'epoch: {epoch}/{args.epochs}: '
+                f'train loss: {train_loss/(batch_idx+1):.4f}, '
                 f'compute efficiency: {compute_efficiency:.2f}, '
             )
 
@@ -145,9 +171,81 @@ def run(args):
 
         if train_loss < min_train_loss:
             min_train_loss = train_loss
-            figure = capture_snapshot(save_dir + '/images', img, output, epoch)
+            if args.is_autoencoder:
+                predictions = output
+            else:
+                output = F.log_softmax(output, dim=1)
+                predictions = torch.argmax(output, axis=1).data.cpu().numpy()
+
+            for idx, prediction in enumerate(predictions):
+                fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+
+                ax1.imshow(img[idx].data.cpu().numpy().transpose(1, 2, 0))
+                ax2.imshow(gt[idx].data.cpu().numpy())
+                if args.is_autoencoder:
+                    ax3.imshow(torch.sigmoid(predictions[idx]).data.cpu().numpy().transpose(1, 2, 0))
+                else:
+                    ax3.imshow(predictions[idx])
+                plt.savefig(save_dir + '/images' + '/{}_{}.png'.format(epoch, idx))
+                plt.close()
+                # plt.show()
+                figure = fig
             writer.add_figure('figure/min_train_loss', figure, epoch)
             #torch.save(model.module.state_dict(), save_dir + '/models/' + str(epoch) + '_best_ae_ever.pth')
+
+        if epoch % 1 == 0:
+            model.eval()
+            pbar = tqdm(enumerate(val_loader), total=len(val_loader))
+
+            with torch.no_grad():
+                for batch_idx, (image, gt) in pbar:
+                    img = image.to(DEVICE)
+                    gt = gt.to(DEVICE)
+
+                    if args.is_autoencoder:
+                        output, mu, logvar = model(img)
+                        loss = criterion(img, output, mu, logvar)
+                    else:
+                        output = model(img)
+                        loss = criterion(output, gt.squeeze(dim=1))
+
+                    val_loss += loss.item()
+                    pbar.set_description(
+                        f'val loss: {val_loss / (batch_idx + 1):.4f}, '
+                        f'epoch: {epoch}/{args.epochs}: ')
+
+            writer.add_scalar('loss/val_loss', val_loss / len(val_loader), epoch)
+            if val_loss < min_val_loss:
+                min_val_loss = val_loss
+
+                if args.is_autoencoder:
+                    predictions = output
+                else:
+                    output = F.log_softmax(output, dim=1)
+                    predictions = torch.argmax(output, axis=1).data.cpu().numpy()
+
+                for idx, prediction in enumerate(predictions):
+                    fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+
+                    ax1.imshow(img[idx].data.cpu().numpy().transpose(1, 2, 0))
+                    ax2.imshow(gt[idx].data.cpu().numpy())
+                    if args.is_autoencoder:
+                        ax3.imshow(torch.sigmoid(predictions[idx]).data.cpu().numpy().transpose(1, 2, 0))
+                    else:
+                        ax3.imshow(predictions[idx])
+                    plt.savefig(save_dir + '/images' + '/{}_{}.png'.format(epoch, idx))
+                    plt.close()
+                    # plt.show()
+                    figure = fig
+                writer.add_figure('figure/min_val_loss', figure, epoch)
+
+                # if epoch > 1:
+                    # torch.save(model.module.state_dict(), save_dir + '/models/' + str(epoch) + '_segnet.pth')
+
+        lr_scheduler.step()
+        print(f'\nEpoch {epoch}/{args.epochs}, '
+              f'training loss: {train_loss / len(train_loader)}, '
+              f'validation loss: {val_loss / len(val_loader)}\n')
 
     print('time elapsed: {:.3f}'.format(time.time() - start))
     del model
@@ -161,9 +259,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('-lr', '--learning-rate', type=float, default=3e-4)
-    parser.add_argument('--batch-size', type=int, default=2)
-    parser.add_argument('--optimizer-step-size', type=int, default=10)
+    parser.add_argument('--batch-size', type=int, default=1)
+    parser.add_argument('--optimizer-step-size', type=int, default=30)
     parser.add_argument('--optimizer-gamma', type=float, default=0.5)
+    parser.add_argument('--is-autoencoder', default=False, type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     args = parser.parse_args()
     print(args)
 
