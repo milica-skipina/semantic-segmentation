@@ -96,8 +96,8 @@ def createLabelImage(annotation, encoding, outline=None):
             continue
 
         # If the category ID is not human, vehicle, object or road, that polygon should not be drawn
-        if name2label[label].categoryId not in [6, 7, 3, 1] or name2label[label].trainId == 255:
-            continue
+        #if name2label[label].categoryId not in [6, 7, 3, 1] or name2label[label].trainId == 255:
+        #    continue
 
         if encoding == "ids":
             val = name2label[label].id
@@ -109,10 +109,10 @@ def createLabelImage(annotation, encoding, outline=None):
             val = name2label[label].categoryId
 
         try:
-            if val == 6:
+            '''if val == 6:
                 val = 2
             if val == 7:
-                val = 4
+                val = 4'''
             if outline:
                 drawer.polygon(polygon, fill=val, outline=outline)
             else:
