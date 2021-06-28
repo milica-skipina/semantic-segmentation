@@ -95,11 +95,10 @@ def createLabelImage(annotation, encoding, outline=None):
         if name2label[label].id < 0:
             continue
 
-        # If the category ID is not human, vehicle or object, that polygon should not be drawn
-        if name2label[label].categoryId not in [6, 7, 3]:
+        # If the category ID is not human, vehicle, object or road, that polygon should not be drawn
+        if name2label[label].categoryId not in [6, 7, 3, 1] or name2label[label].trainId == 255:
             continue
 
-        from random import randint
         if encoding == "ids":
             val = name2label[label].id
         elif encoding == "trainIds":
@@ -110,17 +109,14 @@ def createLabelImage(annotation, encoding, outline=None):
             val = name2label[label].categoryId
 
         try:
-            # check
-            '''if val == 7:
-                val = 128
-            elif val == 3:
-                val = 56
-            elif val == 6:
-                val = 245'''
+            if val == 6:
+                val = 2
+            if val == 7:
+                val = 4
             if outline:
-                drawer.polygon( polygon, fill=val, outline=outline )
+                drawer.polygon(polygon, fill=val, outline=outline)
             else:
-                drawer.polygon( polygon, fill=val )
+                drawer.polygon(polygon, fill=val)
         except:
             print("Failed to draw polygon with label {}".format(label))
             raise
@@ -138,6 +134,9 @@ def json2labelImg(inJson,outImg,encoding=None):
     annotation = Annotation()
     annotation.fromJsonFile(inJson)
     labelImg   = createLabelImage( annotation , encoding )
+    from matplotlib import pyplot as plt
+    #plt.imshow(labelImg)
+    #plt.show()
     labelImg.save( outImg )
 
 # The main method, if you execute this script directly
