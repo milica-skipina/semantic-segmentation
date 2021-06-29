@@ -7,6 +7,26 @@ from cityscapesscripts.preparation.json2labelImg import createLabelImage
 from cityscapesscripts.helpers.annotation import Annotation
 from torch.utils.data import Dataset
 from torchvision import transforms
+import numpy as np
+
+def label2cat(label):
+    # label[label == 3] = 1
+    # label[label == 6] = 2
+    # label[label == 7] = 3
+    s = 0
+    ret = Image.new(label.mode, label.size)
+    for i in range(label.size[0]):
+        for j in range(label.size[1]):
+            if label.getpixel((i, j)) == 0:
+                s += 1
+                ret.putpixel((i, j), 0)
+            elif label.getpixel((i, j)) == 3:
+                ret.putpixel((i, j), 1)
+            elif label.getpixel((i, j)) == 6:
+                ret.putpixel((i, j), 2)
+            elif label.getpixel((i, j)) == 7:
+                ret.putpixel((i, j), 3)
+    return ret, s
 
 
 class CityscapesDataset(Dataset):
@@ -32,17 +52,33 @@ class CityscapesDataset(Dataset):
         annotation.fromJsonFile(label_path)
         label = createLabelImage(annotation, 'categoryId')
         # random crop
-        x = random.randint(0, image.size[0] - 256)
-        y = random.randint(0, image.size[1] - 256)
 
-        image = image.crop((x, y, x + 256, y + 256))
-        label = label.crop((x, y, x + 256, y + 256))
+        done = False
+        it = 0
+        while done == False and it < 1000:
+            it += 1
+            x = random.randint(0, image.size[0] - 256)
+            y = random.randint(0, image.size[1] - 256)
 
+            # print(x)
+            # print(y)
+            temp = image.crop((x, y, x + 256, y + 256))
+            temp_label = label.crop((x, y, x + 256, y + 256))
+            # plt.imshow(temp_label)
+            # plt.show()
+            temp_label, zero_sum = label2cat(temp_label)
+            # plt.imshow(temp_label)
+            # plt.show()
+            # print(zero_sum)
+            if zero_sum < 4*256*256/5:
+                done = True
         # plt.imshow(image)
         # plt.show()
         # plt.imshow(label)
         # plt.show()
 
+        image = temp
+        label = temp_label
         if self.transform:
             image = self.transform(image)
             label = self.transform(label)
@@ -68,4 +104,4 @@ class CityscapesDataset(Dataset):
         images_paths = sorted(images_paths)
         labels_paths = sorted(labels_paths)
 
-        return images_paths[:200], labels_paths[:200]
+        return images_paths[:2], labels_paths[:2]

@@ -128,18 +128,20 @@ class ResnetEncoder(nn.Module):
         ae = AE(input_height=256)
         print(AE.pretrained_weights_available())
         ae = ae.from_pretrained('cifar10-resnet18')
-        for name, param in ae.named_parameters():
-            if param.requires_grad and 'encoder' in name:
-                param.requires_grad = False
+        # for name, param in ae.named_parameters():
+        #     if param.requires_grad and 'encoder' in name:
+        #         param.requires_grad = False
         ae.decoder.conv1 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=(1, 1), bias=False),
+            nn.Conv2d(64, 256, kernel_size=(1, 1), bias=False),
             nn.ReLU(),
             nn.UpsamplingBilinear2d(scale_factor=(4, 4)),
-            nn.Conv2d(128, 256, 1),
+            nn.Conv2d(256, 512, 1),
             nn.ReLU(),
             nn.UpsamplingBilinear2d(scale_factor=(2, 2)),
-            nn.Conv2d(256, 3, 1),
-            nn.Sigmoid()
+            # nn.Conv2d(256, 3, 1),
+            # nn.Sigmoid()
+            nn.ConvTranspose2d(512, 4, 1),  # N, 256, 256
+            nn.Softmax()
         )
         for name, param in ae.named_parameters():
             if param.requires_grad and 'encoder' in name:

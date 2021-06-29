@@ -23,8 +23,8 @@ class MyResnetEncoder(nn.Module):
 
         resnet = models.resnet50(pretrained=True)
         modules = list(resnet.children())[:-1]      # delete the last fc layer.
-        for param in resnet.parameters():
-            param.requires_grad_ = False
+        # for param in resnet.parameters():
+        #     param.requires_grad_ = False
         # self.encoder = nn.Sequential(*modules)
 
         # resnet = models.resnet152(pretrained=True)
@@ -39,14 +39,16 @@ class MyResnetEncoder(nn.Module):
         # Latent vectors mu and sigma
         self.relu = nn.ReLU(inplace=True)
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(256, 512, 12, stride=2, output_padding=1),  # N, 12, 12
+            nn.ConvTranspose2d(256, 256, 12, stride=2, output_padding=1),  # N, 12, 12
             nn.ReLU(),
-            nn.ConvTranspose2d(512, 512, 3, stride=2),  # N, 27, 27
+            nn.ConvTranspose2d(256, 384, 3, stride=2),  # N, 27, 27
             nn.ReLU(),
-            nn.ConvTranspose2d(512, 256, 5, stride=3, output_padding=1),  # N, 84, 84
+            nn.ConvTranspose2d(384, 1024, 5, stride=3, output_padding=1),  # N, 84, 84
             nn.ReLU(),
-            nn.ConvTranspose2d(256, 3, 7, stride=3),  # N, 256, 256
-            nn.Sigmoid()
+            # nn.ConvTranspose2d(256, 3, 7, stride=3),  # N, 256, 256
+            # nn.Sigmoid()
+            nn.ConvTranspose2d(1024, 4, 7, stride=3),  # N, 256, 256
+            nn.Softmax()
         )
 
     def forward(self, x):
