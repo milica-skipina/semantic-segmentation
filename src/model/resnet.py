@@ -1,173 +1,218 @@
-# import torch
-# import torch.nn as nn
-# import torch.nn.functional as F
-# import torch.optim as optim
-# import matplotlib.pyplot as plt
-# from torch.utils.data import DataLoader
-# from torchvision import datasets, transforms
-#
-# from src.data_loader.cityscapes_dataset import CityscapesDataset
-# from src.model.myAutoEncoder import Autoencoder
-#
-#
-# def train(model, num_epochs=5, batch_size=2, learning_rate=1e-3):
-#     torch.manual_seed(42)
-#     criterion = nn.MSELoss() # mean square error loss
-#     optimizer = torch.optim.Adam(model.parameters(),
-#                                  lr=learning_rate,
-#                                  weight_decay=1e-5) # <--
-#     train_loader = torch.utils.data.DataLoader(mnist_data,
-#                                                batch_size=batch_size,
-#                                                shuffle=True)
-#     train_loader = DataLoader(CityscapesDataset('../../data/raw/leftImg8bit/train', '../../data/raw/gtFine/train'),
-#                               batch_size=batch_size, shuffle=True, pin_memory=True, drop_last=False
-#                               )
-#
-#
-#     outputs = []
-#     for epoch in range(num_epochs):
-#         for data in train_loader:
-#             img, _ = data
-#             recon = model(img)
-#             loss = criterion(recon, img)
-#             loss.backward()
-#             optimizer.step()
-#             optimizer.zero_grad()
-#
-#         print('Epoch:{}, Loss:{:.4f}'.format(epoch+1, float(loss)))
-#         outputs.append((epoch, img, recon),)
-#     return outputs
-#
-# mnist_data = datasets.MNIST('data', train=True, download=True, transform=transforms.ToTensor())
-# mnist_data = list(mnist_data)[:4096]
-#
-# model = Autoencoder()
-# max_epochs = 2000
-# outputs = train(model, num_epochs=max_epochs)
-#
-# for k in range(0, max_epochs, 20):
-#     plt.figure(figsize=(9, 2))
-#     imgs = outputs[k][1].detach().numpy()
-#     recon = outputs[k][2].detach().numpy()
-#     for i, item in enumerate(imgs):
-#         if i >= 9: break
-#         plt.subplot(2, 9, i + 1)
-#         plt.imshow(item[0])
-#
-#     for i, item in enumerate(recon):
-#         if i >= 9: break
-#         plt.subplot(2, 9, 9 + i + 1)
-#         plt.imshow(item[0])
-#
-#     plt.show()
-
-# ae = AE(input_height=256)
-# print(AE.pretrained_weights_available())
-# ae = ae.from_pretrained('cifar10-resnet18')
-# ae.freeze()
-# ae = nn.DataParallel(ae)
-# ae.to(DEVICE)
-
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.optim import lr_scheduler
-import numpy as np
-import torchvision
-from torchvision import datasets, models, transforms
-import matplotlib.pyplot as plt
-import time
-import os
-import copy
+import torchvision.models as models
+import torch.nn.functional as F
 
-import torch
-from torch import nn
-from torch.nn import functional as F
 
-from pl_bolts.models.autoencoders import AE
+def make_up_block(in_channels, out_channels):
+    upblock = nn.Sequential(
+        nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
 
-class ResnetEncoder(nn.Module):
-    def __init__(self, input_height):
-        super().__init__()
-        # 256, 256
-        # self.layer = nn.Sequential(
-        #     nn.Conv2d(3, 3, 33, stride=1) # N, 224, 224
-        # )
-        # self.encoder = nn.Sequential(
-        #     nn.Conv2d(3, 256, 7, stride=3), # N, 84, 84
-        #     nn.ReLU(),
-        #     nn.Conv2d(256, 512, 5, stride=3), # N, 27, 27
-        #     nn.ReLU(),
-        #     nn.Conv2d(512, 512, 3, stride=2), # N, 12, 12
-        #     nn.ReLU(),
-        #     nn.Conv2d(512, 256, 12), # 256, 1, 1
-        # )
-        # # 256, 1, 1
-        # self.decoder = nn.Sequential(
-        #     nn.ConvTranspose2d(256, 512, 12), # N, 12, 12
-        #     nn.ReLU(),
-        #     nn.ConvTranspose2d(512, 512, 3, stride=2), # N, 27, 27
-        #     nn.ReLU(),
-        #     nn.ConvTranspose2d(512, 256, 5, stride=3, output_padding=1), # N, 84, 84
-        #     nn.ReLU(),
-        #     nn.ConvTranspose2d(256, 3, 7, stride=3), # N, 256, 256
-        #     nn.Tanh()
-        # )
-        # ae = AE(input_height=input_height, enc_out_dim=256)
-        # ae = ae.from_pretrained('cifar10-resnet18')
-        # ae.freeze()
-        # self.ae = ae
-        # self.conv = nn.Sequential(
-        #     nn.ConvTranspose2d(3, 128, 2, stride=2),
-        #     nn.ReLU(),
-        #     nn.ConvTranspose2d(128, 512, 2, stride=2),
-        #     nn.ReLU(),
-        #     nn.ConvTranspose2d(512, 3, 2, stride=2),
-        #     nn.Sigmoid()
-        # )
-        ae = AE(input_height=256)
-        print(AE.pretrained_weights_available())
-        ae = ae.from_pretrained('cifar10-resnet18')
-        # for name, param in ae.named_parameters():
-        #     if param.requires_grad and 'encoder' in name:
-        #         param.requires_grad = False
-        ae.decoder.conv1 = nn.Sequential(
-            nn.Conv2d(64, 256, kernel_size=(1, 1), bias=False),
-            nn.ReLU(),
-            nn.UpsamplingBilinear2d(scale_factor=(4, 4)),
-            nn.Conv2d(256, 512, 1),
-            nn.ReLU(),
-            nn.UpsamplingBilinear2d(scale_factor=(2, 2)),
-            # nn.Conv2d(256, 3, 1),
-            # nn.Sigmoid()
-            nn.ConvTranspose2d(512, 4, 1),  # N, 256, 256
-            nn.Softmax()
-        )
-        for name, param in ae.named_parameters():
-            if param.requires_grad and 'encoder' in name:
-                param.requires_grad = False
-        self.ae = ae
+        nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
+        nn.BatchNorm2d(out_channels),
+        nn.ReLU(inplace=True),
+        nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
+        nn.BatchNorm2d(out_channels),
+        nn.ReLU(inplace=True),
+    )
 
+    return upblock
+
+
+class Decoder(nn.Module):
+    def __init__(self, out_classes):
+        super(Decoder, self).__init__()
+        self.up_conv3_b = make_up_block(1024, 512)
+        self.up_conv2_b = make_up_block(512, 256)
+        self.up_conv1_b = make_up_block(256, 128)
+        self.up_conv0_b = make_up_block(128, 64)
+
+        self.conv_last_b = nn.Conv2d(64, out_classes, kernel_size=1)
 
     def forward(self, x):
-        x = self.ae(x)
-        # x = self.conv(x)
-
-        # x = self.upsampling(x) # 128
-        # x = self.upsampling(x) # 256
+        x = self.up_conv3_b(x)
+        x = self.up_conv2_b(x)
+        x = self.up_conv1_b(x)
+        x = self.up_conv0_b(x)
+        x = self.conv_last_b(x)
         return x
 
 
-# from src.main import prepare_data
-#
-# DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#
-# train_loader, val_loader = prepare_data()
-#
-# model = models.resnet18(pretrained=True)
-# for params in model.parameters():
-#     params.requires_grad = False
-# num_ftrs = model.fc.in_features
-#
-# model.fc = nn.Linear(num_ftrs, 2)
-# model.to(DEVICE)
+class Flatten(nn.Module):
+    def forward(self, input):
+        return input.view(input.size(0), -1)
+
+
+class UnFlatten(nn.Module):
+    def __init__(self, shape):
+        super(UnFlatten, self).__init__()
+        self.shape = shape
+
+    def forward(self, input):
+        return input.view(input.size(0), *self.shape[1:])
+
+
+class ResNetBottleneck(nn.Module):
+    def __init__(self, out_classes, resnet_type, is_autoencoder):
+        super(ResNetBottleneck, self).__init__()
+
+        # resnet layer4 channels
+        self.in_channels = 1024
+        self.is_autoencoder = is_autoencoder
+
+        if resnet_type == 50:
+            resnet = models.resnet50(pretrained=True)
+            # remove fully connected layer, avg pool and layer5:
+            self.encoder = nn.Sequential(*list(resnet.children())[:-3])
+
+            print('pretrained resnet, 50')
+        elif resnet_type == 101:
+            resnet = models.resnet101(pretrained=True)
+            # remove fully connected layer, avg pool and layer5:
+            self.encoder = nn.Sequential(*list(resnet.children())[:-3])
+
+            print('pretrained resnet, 101')
+        elif resnet_type == 152:
+            resnet = models.resnet152(pretrained=True)
+            # remove fully connected layer, avg pool and layer5:
+            self.encoder = nn.Sequential(*list(resnet.children())[:-3])
+
+            print('pretrained resnet, 152')
+        else:
+            raise Exception('resnet_type must be in {50, 101, 152}!')
+
+        # WORSE RESULTS
+        self.layer4_up = self._make_up_block(Bottleneck, 512, 1, stride=2)
+        self.layer3_up = self._make_up_block(Bottleneck, 256, 2, stride=2)
+        self.layer2_up = self._make_up_block(Bottleneck, 128, 2, stride=2)
+        self.layer1_up = self._make_up_block(Bottleneck, 64, 2, stride=2)
+
+        self.out = nn.Conv2d(64, out_classes, kernel_size=1)
+
+        # BETTER RESULTS
+        self.decoder = Decoder(out_classes)
+
+        if is_autoencoder:
+            self.conv1 = nn.Conv2d(1024, 64, kernel_size=1)  # 1024->64
+            self.conv2 = nn.Conv2d(1024, 64, kernel_size=1)  # 1024->64
+
+            self.flatten = Flatten()  # 64x8x8
+
+            self.unflatten = UnFlatten(shape=(-1, 64, 16, 16))
+
+            self.conv3 = nn.Conv2d(64, 1024, kernel_size=1)
+
+    def _make_up_block(self, block, init_channels, num_layer, stride=1):
+        upsample = None
+        # expansion = block.expansion
+        if stride != 1 or self.in_channels != int(init_channels / 2):
+            upsample = nn.Sequential(
+                nn.ConvTranspose2d(self.in_channels,
+                                   init_channels,
+                                   kernel_size=1,
+                                   stride=stride,
+                                   output_padding=1),
+                nn.BatchNorm2d(init_channels),
+            )
+        layers = []
+        for i in range(1, num_layer):
+            layers.append(block(self.in_channels, init_channels))
+        layers.append(block(self.in_channels, init_channels, stride, upsample))
+        self.in_channels = init_channels
+        return nn.Sequential(*layers)
+
+    def reparameterize(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        esp = torch.FloatTensor(*mu.size()).normal_()
+        z = mu + std * esp
+        return z
+
+    def bottleneck(self, h):
+        mu, logvar = self.conv1(h), self.conv2(h)
+        mu = self.flatten(mu)
+        logvar = self.flatten(logvar)
+        z = self.reparameterize(mu, logvar)
+        return z, mu, logvar
+
+    def forward(self, x):
+
+        h = self.encoder(x)
+
+        # decoder worse results
+        # out = self.layer4_up(out)
+        # out = self.layer3_up(out)
+        # out = self.layer2_up(out)
+        # out = self.layer1_up(out)
+
+        # out = self.out(out)
+
+        # decoder
+        if self.is_autoencoder:
+            z, mu, logvar = self.bottleneck(h)
+            z = self.unflatten(z)
+            z = self.conv3(z)
+            return self.decoder(z), mu, logvar
+
+        else:
+            return self.decoder(h)
+
+
+class Bottleneck(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1, upsample=None):
+        super(Bottleneck, self).__init__()
+        self.stride = stride
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        if stride == 1:
+            self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3,
+                                   stride=stride, padding=1)
+            self.conv3 = nn.Conv2d(out_channels, out_channels * 2,
+                                   kernel_size=1)
+            self.bn3 = nn.BatchNorm2d(out_channels * 2)
+
+        else:
+            self.conv2 = nn.ConvTranspose2d(out_channels, out_channels,
+                                            kernel_size=3,
+                                            stride=stride,
+                                            padding=1,
+                                            output_padding=1)
+            self.conv3 = nn.Conv2d(out_channels, out_channels,
+                                   kernel_size=1)
+            self.bn3 = nn.BatchNorm2d(out_channels)
+
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU()
+        self.upsample = upsample
+
+    def forward(self, x):
+        shortcut = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = nn.ReLU()(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = nn.ReLU()(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+        out = nn.ReLU()(out)
+
+        if self.upsample is not None:
+            shortcut = self.upsample(x)
+
+        out += shortcut
+
+        return nn.ReLU()(out)
+
+
+def ResNet50(out_classes=4, is_autoencoder=False):
+    return ResNetBottleneck(out_classes, resnet_type=50, is_autoencoder=is_autoencoder)
+
+
+if __name__ == '__main__':
+    model = ResNet50()
+    input_tensor = torch.rand(8, 3, 256, 256)
+
+    output = model(input_tensor)
