@@ -137,3 +137,4 @@ data/raw/gtFine/README
 data/raw/leftImg8bit/license.txt
 data/raw/leftImg8bit/README
 src/runs
+reports/*
