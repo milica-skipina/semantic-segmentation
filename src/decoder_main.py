@@ -15,9 +15,9 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 import torch.optim.lr_scheduler as lr_scheduler
 from src.model.convAutoencoder import ConvAutoencoder
-from src.model.resnet import ResnetEncoder
 from src.model.resnetEncoder import MyResnetEncoder
 from src.model.semanticSegmentation import SemanticSegmentationModel
+import torch.nn.functional as F
 
 torch.backends.cudnn.benchmark = True
 np.random.seed(1)
@@ -29,10 +29,10 @@ ROOT = '../'
 
 
 def prepare_data():
-    train_dataset = CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train')
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, drop_last=True)
-    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/val', '../data/raw/gtFine/val'),
-                             batch_size=10, shuffle=True, pin_memory=True, drop_last=False
+    train_dataset = CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train', dataset_len=100, transform=True)
+    train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True, pin_memory=True, drop_last=True)
+    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/val', '../data/raw/gtFine/val', dataset_len=100, transform=True),
+                            batch_size=20, shuffle=True, pin_memory=True, drop_last=False
                              )
 
     return train_loader, test_loader
@@ -75,25 +75,25 @@ def capture_snapshot(dir, img, output, epoch):
     for idx, prediction in enumerate(output):
         fig, (ax1, ax2) = plt.subplots(1, 2)
         ax1.imshow(transforms.ToPILImage()(to_img(img[idx].cpu().data)))
-        ax2.imshow(transforms.ToPILImage()(to_img_output(output[idx].cpu().data)))
+        ax2.imshow(transforms.ToPILImage()(to_img(output[idx].cpu().data)))
         plt.savefig(dir + '/{}_{}.png'.format(epoch, idx))
         plt.close()
-        # plt.show()
+        #plt.show()
         return fig
 
 
 def init_model():
     encoder = ConvAutoencoder()
-    # encoder = nn.DataParallel(encoder)
-    encoder.to(DEVICE)
-    checkpoint_path = "/home/milica/Desktop/NN/reports/13_06_22_25/autoencoderCheckpoint.pth"
-    try:
-        loaded_checkpoint = torch.load(checkpoint_path)
-        encoder.load_state_dict(loaded_checkpoint['model_state'])
-    except:
-        print("Encoder not found")
+    encoder = nn.DataParallel(encoder)
+    # encoder.to(DEVICE)
+    checkpoint_path = "/home/milica/Desktop/NN/reports/19_06_15_44/autoencoderCheckpoint.pth"
+    # try:
+    loaded_checkpoint = torch.load(checkpoint_path)
+    encoder.load_state_dict(loaded_checkpoint['model_state'])
 
-    net = SemanticSegmentationModel(encoder.encoder)
+    # except:
+    #     print("Encoder not found")
+    net = SemanticSegmentationModel(encoder.module.encoder)
     # net = MyResnetEncoder()
     # net = ResnetEncoder(256)
     net = nn.DataParallel(net)
@@ -139,24 +139,23 @@ def run(args):
     writer.add_text('hyperparameters/', str(vars(args)))
 
     optimizer = Adam(model.parameters(), lr=args.learning_rate)
-    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.95, patience=5, min_lr=1e-7)
-    weights = torch.tensor([1, 5, 3, 2], dtype=torch.float32)
-    criterion = CrossEntropyLoss(weight=weights)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.95, patience=50, min_lr=1e-7)
+    weights = torch.tensor([0.4, 0.4, 0.4, 0.5, 1, 0.5, 1, 0.7], dtype=torch.float32)
+    criterion = CrossEntropyLoss()
 
     min_train_loss = np.inf
 
-    checkpoint_path = save_dir + "/decoderCheckpoint.pth"
-    # checkpoint_path = "/home/milica/Desktop/NN/reports/19_06_15_44/autoencoderCheckpoint.pth"
+    # checkpoint_path = save_dir + "/decoderCheckpoint.pth"
+    checkpoint_path = "/home/milica/Desktop/NN/reports/02_07_16_35/decoderCheckpoint.pth"
     try:
         loaded_checkpoint = torch.load(checkpoint_path)
         loaded_epoch = loaded_checkpoint['epoch']
         model.load_state_dict(loaded_checkpoint['model_state'])
-        optimizer.load_state_dict(loaded_checkpoint['optim_state'])
+        # optimizer.load_state_dict(loaded_checkpoint['optim_state'])
         # print("FOUND")
     except:
         print("Model not found")
         loaded_epoch = 0
-    # checkpoint_path = save_dir + "/decoderCheckpoint.pth"
 
     print('Training loop started.')
 
@@ -185,8 +184,8 @@ def run(args):
             # temp2[:, 2, :, :] = temp2[:, 0, :, :]*1.2
             # temp2[:, 3, :, :] = temp2[:, 0, :, :]*1.1
 
-            temp = torch.squeeze(gt).long()
-            loss = criterion(output, temp)
+            # temp = torch.squeeze(gt).long()
+            loss = criterion(output, gt.squeeze(dim=1))
             # BACKWARD
             optimizer.zero_grad()
             loss.backward()
@@ -201,7 +200,7 @@ def run(args):
                 f'train loss: {train_loss / (batch_idx + 1):.4f}, '
                 f'epoch: {epoch}/{args.epochs}: '
                 f'compute efficiency: {compute_efficiency:.2f}, '
-                f'lr: {optimizer.state_dict()["param_groups"][0]["lr"]:.6f}, '
+                f'lr: {optimizer.state_dict()["param_groups"][0]["lr"]:.8f}, '
 
             )
 
@@ -216,7 +215,26 @@ def run(args):
             #     min_val_loss = val_loss
             #     print("------------------- VALIDATION -------------------")
             #     print(min_val_loss)
-            figure = capture_snapshot(save_dir + '/images', gt, output, epoch)
+            if args.is_autoencoder:
+                predictions = output
+            else:
+                output = F.log_softmax(output, dim=1)
+                predictions = torch.argmax(output, axis=1).data.cpu().numpy()
+            for idx, prediction in enumerate(predictions):
+                if idx > 13:
+                    fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+
+                    ax1.imshow(img[idx].data.cpu().numpy().transpose(1, 2, 0))
+                    ax2.imshow(gt[idx].data.cpu().numpy())
+                    if args.is_autoencoder:
+                        ax3.imshow(torch.sigmoid(predictions[idx]).data.cpu().numpy().transpose(1, 2, 0))
+                    else:
+                        ax3.imshow(predictions[idx])
+                    plt.savefig(save_dir + '/images' + '/{}_{}.png'.format(epoch, idx))
+                    plt.close()
+                    # plt.show()
+                    figure = fig
+            # figure = capture_snapshot(save_dir + '/images', gt, output, epoch)
             writer.add_figure('figure/min_train_loss', figure, epoch)
             checkpoint_path = save_dir + "/decoderCheckpoint.pth"
             checkpoint = {
@@ -242,10 +260,11 @@ if __name__ == '__main__':
     # ARGUMENT PARSING
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=5000)
-    parser.add_argument('-lr', '--learning-rate', type=float, default=5e-5)
-    parser.add_argument('--batch-size', type=int, default=24)
-    parser.add_argument('--optimizer-step-size', type=int, default=10)
+    parser.add_argument('-lr', '--learning-rate', type=float, default=3e-5)
+    parser.add_argument('--batch-size', type=int, default=1)
+    parser.add_argument('--optimizer-step-size', type=int, default=30)
     parser.add_argument('--optimizer-gamma', type=float, default=0.5)
+    parser.add_argument('--is-autoencoder', default=False, type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     args = parser.parse_args()
     print(args)
 

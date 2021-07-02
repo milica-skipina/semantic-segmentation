@@ -1,14 +1,17 @@
 import os
 import random
 
+import numpy as np
 import torch.utils.data
 from PIL import Image
-import matplotlib.pyplot as plt
-from cityscapesscripts.preparation.json2labelImg import createLabelImage
-from cityscapesscripts.helpers.annotation import Annotation
 from torch.utils.data import Dataset
 from torchvision import transforms
-import numpy as np
+
+from cityscapesscripts.helpers.annotation import Annotation
+from cityscapesscripts.preparation.json2labelImg import createLabelImage
+
+TRAIN_H = 256
+TRAIN_W = 256
 
 
 def load_data(data_path, labeled_data_path):
@@ -29,17 +32,18 @@ def load_data(data_path, labeled_data_path):
     images_paths = sorted(images_paths)
     labels_paths = sorted(labels_paths)
 
-    return images_paths[:5], labels_paths[:5]
+    return images_paths, labels_paths
 
 
 class CityscapesDataset(Dataset):
-    def __init__(self, data_path: str, labeled_data_path: str, dataset_len: int, transform: bool):
+    def __init__(self, data_path: str, labeled_data_path: str, dataset_len: int, transform: bool, is_test=False):
         self.data_path = data_path
         self.labeled_data_path = labeled_data_path
         self.images_paths, self.labels_paths = load_data(data_path, labeled_data_path)
         self.transform = transform
         self.data_len = len(self.images_paths)
         self.len = dataset_len
+        self.is_test = is_test
 
     @staticmethod
     def transform_image(image, ground_truth):
@@ -62,22 +66,43 @@ class CityscapesDataset(Dataset):
         annotation = Annotation()
         annotation.fromJsonFile(label_path)
         label = createLabelImage(annotation, 'categoryId')
-        # random crop
-        x = random.randint(0, image.size[0] - 256)
-        y = random.randint(0, image.size[1] - 256)
-
-        image = image.crop((x, y, x + 256, y + 256))
-        label = label.crop((x, y, x + 256, y + 256))
-
         # plt.imshow(image)
         # plt.show()
         # plt.imshow(label)
         # plt.show()
+        if self.is_test:
+            images = []
+            labels = []
+            for x in range(2048 // TRAIN_W):
+                for y in range(1024 // TRAIN_H):
+                    im = image.crop((x * TRAIN_W, y * TRAIN_H, (x + 1) * TRAIN_W, (y + 1) * TRAIN_H))
+                    lb = label.crop((x * TRAIN_W, y * TRAIN_H, (x + 1) * TRAIN_W, (y + 1) * TRAIN_H))
+                    # plt.imshow(im)
+                    # plt.show()
+                    # plt.imshow(lb)
+                    # plt.show()
+                    if self.transform:
+                        im, lb = self.transform_image(im, lb)
+                    images.append(im)
+                    labels.append(lb)
+            return images, labels
+        else:
+            # random crop
+            x = random.randint(0, image.size[0] - TRAIN_W)
+            y = random.randint(0, image.size[1] - TRAIN_H)
 
-        if self.transform:
-            image, label = self.transform_image(image, label)
+            image = image.crop((x, y, x + 256, y + TRAIN_W))
+            label = label.crop((x, y, x + 256, y + TRAIN_H))
 
-        return image, label
+            # plt.imshow(image)
+            # plt.show()
+            # plt.imshow(label)
+            # plt.show()
+
+            if self.transform:
+                image, label = self.transform_image(image, label)
+
+            return image, label
 
 
 if __name__ == '__main__':
@@ -91,4 +116,3 @@ if __name__ == '__main__':
         print('\n')
 
     print(len(loader))
-

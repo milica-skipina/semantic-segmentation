@@ -19,6 +19,9 @@ from data_loader.cityscapes_dataset import CityscapesDataset
 from model.resnet import ResNet50
 
 # seeds
+from src.model.convAutoencoder import ConvAutoencoder
+from src.model.semanticSegmentation import SemanticSegmentationModel
+
 torch.backends.cudnn.benchmark = True
 np.random.seed(1)
 torch.manual_seed(1)
@@ -31,13 +34,10 @@ ROOT = '../'
 
 def prepare_data():
 
-    train_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train',
-                                                dataset_len=1, transform=True),
-                              batch_size=1, shuffle=True, pin_memory=True, drop_last=False
-                              )
-    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/val', '../data/raw/gtFine/val',
-                                               dataset_len=1, transform=True),
-                             batch_size=1, shuffle=True, pin_memory=True, drop_last=False
+    train_dataset = CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train', dataset_len=10, transform=True)
+    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, drop_last=True)
+    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/val', '../data/raw/gtFine/val', dataset_len=10, transform=True),
+                            batch_size=2, shuffle=True, pin_memory=True, drop_last=False
                              )
 
     return train_loader, test_loader
@@ -77,7 +77,28 @@ def init_model(is_autoencoder=False):
     if is_autoencoder:
         net = ResNet50(out_classes=3, is_autoencoder=True)
     else:
-        net = ResNet50(out_classes=8, is_autoencoder=False)
+        encoder = ConvAutoencoder()
+        encoder = nn.DataParallel(encoder)
+        # encoder.to(DEVICE)
+        checkpoint_path = "/home/milica/Desktop/NN/reports/19_06_15_44/autoencoderCheckpoint.pth"
+        # try:
+        loaded_checkpoint = torch.load(checkpoint_path)
+        encoder.load_state_dict(loaded_checkpoint['model_state'])
+
+        # except:
+        #     print("Encoder not found")
+        net = SemanticSegmentationModel(encoder.module.encoder)
+        # net = MyResnetEncoder()
+        # net = ResnetEncoder(256)
+        net = nn.DataParallel(net)
+        net.to(DEVICE)
+
+        print('Model loaded.')
+        # net = ResNet50(out_classes=8, is_autoencoder=False)
+        # [2, 1024, 16, 16]
+        # [2, 512, 13, 13]
+        return net
+        # net = ResNet50(out_classes=8, is_autoencoder=False)
     #net = ResUNetSimple(in_channels=3, out_classes=3)
     net = nn.DataParallel(net)
     net.to(DEVICE)
@@ -192,8 +213,14 @@ def run(args):
                 figure = fig
             writer.add_figure('figure/min_train_loss', figure, epoch)
             #torch.save(model.module.state_dict(), save_dir + '/models/' + str(epoch) + '_best_ae_ever.pth')
-
-        if epoch % 1 == 0:
+            checkpoint_path = save_dir + "/models/decoderCheckpoint.pth"
+            checkpoint = {
+                "epoch": epoch,
+                "model_state": model.state_dict(),
+                "optim_state": optimizer.state_dict()
+            }
+            torch.save(checkpoint, checkpoint_path)
+        if epoch % 20 == 0:
             model.eval()
             pbar = tqdm(enumerate(val_loader), total=len(val_loader))
 

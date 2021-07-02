@@ -124,6 +124,26 @@ def writeDict2JSON(dictName, fileName):
         f.write(json.dumps(dictName, default=lambda o: o.__dict__, sort_keys=True, indent=4))
 
 
+def getCatName(classId):
+    if classId == 0:
+        return 'void'
+    elif classId == 1:
+        return 'falt'
+    elif classId == 2:
+        return 'construction'
+    elif classId == 3:
+        return 'object'
+    elif classId == 4:
+        return 'nature'
+    elif classId == 5:
+        return 'sky'
+    elif classId == 6:
+        return 'human'
+    elif classId == 7:
+        return 'vehicle'
+    else:
+        return 'undefined'
+
 # dummy main
 if __name__ == "__main__":
     printError("Only for include, not executable on its own.")
