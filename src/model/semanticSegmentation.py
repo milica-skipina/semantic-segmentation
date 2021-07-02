@@ -23,8 +23,8 @@ class SemanticSegmentationModel(nn.Module):
             nn.ConvTranspose2d(784, 1024, 5, stride=3, output_padding=1), # N, 84, 84
             nn.BatchNorm2d(num_features=1024),
             nn.ReLU(),
-            nn.ConvTranspose2d(1024, 4, 7, stride=3), # N, 256, 256
-            nn.Softmax()
+            nn.ConvTranspose2d(1024, 8, 7, stride=3), # N, 256, 256
+            # nn.Softmax()
         )
 
         # self.fc = nn.Sequential(
