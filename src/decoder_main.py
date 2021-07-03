@@ -139,14 +139,14 @@ def run(args):
     writer.add_text('hyperparameters/', str(vars(args)))
 
     optimizer = Adam(model.parameters(), lr=args.learning_rate)
-    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.95, patience=50, min_lr=1e-7)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.95, patience=30, min_lr=1e-7)
     weights = torch.tensor([0.4, 0.4, 0.4, 0.5, 1, 0.5, 1, 0.7], dtype=torch.float32)
     criterion = CrossEntropyLoss()
 
     min_train_loss = np.inf
 
     # checkpoint_path = save_dir + "/decoderCheckpoint.pth"
-    checkpoint_path = "/home/milica/Desktop/NN/reports/02_07_16_35/decoderCheckpoint.pth"
+    checkpoint_path = "/home/milica/Desktop/NN/reports/02_07_19_14/decoderCheckpoint.pth"
     try:
         loaded_checkpoint = torch.load(checkpoint_path)
         loaded_epoch = loaded_checkpoint['epoch']

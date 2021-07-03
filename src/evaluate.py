@@ -56,7 +56,7 @@ def load_model(model):
         print('Model loaded.')
     else:
         # model_path = '../models/autoencoder.pth'
-        model_path = '/home/milica/Desktop/NN/reports/01_07_16_29/decoderCheckpoint.pth'
+        model_path = '/home/milica/Desktop/NN/reports/03_07_02_14/decoderCheckpoint.pth'
         loaded_model = torch.load(model_path)
         encoder = ConvAutoencoder()
         encoder = nn.DataParallel(encoder)
@@ -91,7 +91,7 @@ def run(args):
 
     start = time.time()
 
-    save_dir = ROOT + 'results/'
+    save_dir = ROOT + 'results/autoencoder/'
     # for creating test dataset
     # save_dir = ROOT + 'data/processed/gtFine/val'
     if not os.path.exists(save_dir):
@@ -116,8 +116,10 @@ def run(args):
             output = model(img)
             loss = criterion(output, lbl.squeeze(dim=1))
             test_loss += loss.item()
+            output = F.log_softmax(output, dim=1)
+            output = torch.argmax(output, axis=1).data.cpu().numpy()
 
-            l = output.data.cpu().numpy().transpose(1, 2, 0).reshape(TRAIN_W, TRAIN_H)
+            l = output.transpose(1, 2, 0).reshape(TRAIN_W, TRAIN_H)
             # for creating test dataset
             # l = lbl.data.cpu().numpy().transpose(1, 2, 0).reshape(TRAIN_W, TRAIN_H)
             l = Image.fromarray(l.astype('uint8'), 'L')
@@ -135,7 +137,7 @@ def run(args):
         # plt.show()
 
     print('time elapsed: {:.3f}'.format(time.time() - start))
-    print('total test loss: ' + str(test_loss / len(test_loader)))
+    print('total test loss: ' + str(test_loss / len(test_loader) / 32))
     del model
 
 
