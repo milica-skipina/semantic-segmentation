@@ -29,8 +29,8 @@ ROOT = '../'
 
 
 def prepare_data():
-    train_dataset = CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train', dataset_len=100, transform=True)
-    train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True, pin_memory=True, drop_last=True)
+    train_dataset = CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train', dataset_len=160, transform=True)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True, drop_last=False)
     test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/val', '../data/raw/gtFine/val', dataset_len=100, transform=True),
                             batch_size=20, shuffle=True, pin_memory=True, drop_last=False
                              )
@@ -86,7 +86,7 @@ def init_model():
     encoder = ConvAutoencoder()
     encoder = nn.DataParallel(encoder)
     # encoder.to(DEVICE)
-    checkpoint_path = "/home/milica/Desktop/NN/reports/19_06_15_44/autoencoderCheckpoint.pth"
+    checkpoint_path = "/home/milica/Desktop/NN/reports/03_07_10_20/decoderCheckpoint.pth"
     # try:
     loaded_checkpoint = torch.load(checkpoint_path)
     encoder.load_state_dict(loaded_checkpoint['model_state'])
@@ -139,14 +139,14 @@ def run(args):
     writer.add_text('hyperparameters/', str(vars(args)))
 
     optimizer = Adam(model.parameters(), lr=args.learning_rate)
-    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.95, patience=30, min_lr=1e-7)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.95, patience=20, min_lr=1e-7)
     weights = torch.tensor([0.4, 0.4, 0.4, 0.5, 1, 0.5, 1, 0.7], dtype=torch.float32)
     criterion = CrossEntropyLoss()
 
     min_train_loss = np.inf
 
     # checkpoint_path = save_dir + "/decoderCheckpoint.pth"
-    checkpoint_path = "/home/milica/Desktop/NN/reports/02_07_19_14/decoderCheckpoint.pth"
+    checkpoint_path = "/home/milica/Desktop/NN/reports/03_07_04_16/decoderCheckpoint.pth"
     try:
         loaded_checkpoint = torch.load(checkpoint_path)
         loaded_epoch = loaded_checkpoint['epoch']

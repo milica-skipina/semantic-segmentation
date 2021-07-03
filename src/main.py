@@ -20,6 +20,7 @@ from model.resnet import ResNet50
 
 # seeds
 from src.model.convAutoencoder import ConvAutoencoder
+from src.model.inception import InceptionV3
 from src.model.semanticSegmentation import SemanticSegmentationModel
 
 torch.backends.cudnn.benchmark = True
@@ -34,8 +35,8 @@ ROOT = '../'
 
 def prepare_data():
 
-    train_dataset = CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train', dataset_len=10, transform=True)
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, drop_last=True)
+    train_dataset = CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train', dataset_len=512, transform=True)
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, pin_memory=True, drop_last=True)
     test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/val', '../data/raw/gtFine/val', dataset_len=10, transform=True),
                             batch_size=2, shuffle=True, pin_memory=True, drop_last=False
                              )
@@ -77,28 +78,29 @@ def init_model(is_autoencoder=False):
     if is_autoencoder:
         net = ResNet50(out_classes=3, is_autoencoder=True)
     else:
-        encoder = ConvAutoencoder()
-        encoder = nn.DataParallel(encoder)
-        # encoder.to(DEVICE)
-        checkpoint_path = "/home/milica/Desktop/NN/reports/19_06_15_44/autoencoderCheckpoint.pth"
-        # try:
-        loaded_checkpoint = torch.load(checkpoint_path)
-        encoder.load_state_dict(loaded_checkpoint['model_state'])
-
-        # except:
-        #     print("Encoder not found")
-        net = SemanticSegmentationModel(encoder.module.encoder)
-        # net = MyResnetEncoder()
-        # net = ResnetEncoder(256)
-        net = nn.DataParallel(net)
-        net.to(DEVICE)
-
-        print('Model loaded.')
+        # encoder = ConvAutoencoder()
+        # encoder = nn.DataParallel(encoder)
+        # # encoder.to(DEVICE)
+        # checkpoint_path = "/home/milica/Desktop/NN/reports/19_06_15_44/autoencoderCheckpoint.pth"
+        # # try:
+        # loaded_checkpoint = torch.load(checkpoint_path)
+        # encoder.load_state_dict(loaded_checkpoint['model_state'])
+        #
+        # # except:
+        # #     print("Encoder not found")
+        # net = SemanticSegmentationModel(encoder.module.encoder)
+        # # net = MyResnetEncoder()
+        # # net = ResnetEncoder(256)
+        # net = nn.DataParallel(net)
+        # net.to(DEVICE)
+        #
+        # print('Model loaded.')
+        # # net = ResNet50(out_classes=8, is_autoencoder=False)
+        # # [2, 1024, 16, 16]
+        # # [2, 512, 13, 13]
+        # return net
         # net = ResNet50(out_classes=8, is_autoencoder=False)
-        # [2, 1024, 16, 16]
-        # [2, 512, 13, 13]
-        return net
-        # net = ResNet50(out_classes=8, is_autoencoder=False)
+        net = InceptionV3(out_classes=8)
     #net = ResUNetSimple(in_channels=3, out_classes=3)
     net = nn.DataParallel(net)
     net.to(DEVICE)
@@ -138,7 +140,8 @@ def run(args):
     writer.add_text('hyperparameters/', str(vars(args)))
 
     optimizer = Adam(model.parameters(), lr=args.learning_rate)
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.optimizer_step_size, gamma=args.optimizer_gamma)
+    # lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.optimizer_step_size, gamma=args.optimizer_gamma)
+    lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.95, patience=50, min_lr=1e-7)
 
     if args.is_autoencoder:
         criterion = VAELoss()
@@ -184,6 +187,7 @@ def run(args):
                 f'epoch: {epoch}/{args.epochs}: '
                 f'train loss: {train_loss/(batch_idx+1):.4f}, '
                 f'compute efficiency: {compute_efficiency:.2f}, '
+                f'lr: {optimizer.state_dict()["param_groups"][0]["lr"]:.8f}, '
             )
 
             start_time = time.time()
@@ -269,12 +273,14 @@ def run(args):
                 # if epoch > 1:
                     # torch.save(model.module.state_dict(), save_dir + '/models/' + str(epoch) + '_segnet.pth')
 
-        lr_scheduler.step()
+        lr_scheduler.step(train_loss)
         print(f'\nEpoch {epoch}/{args.epochs}, '
               f'training loss: {train_loss / len(train_loader)}, '
-              f'validation loss: {val_loss / len(val_loader)}\n')
+              f'validation loss: {val_loss / len(val_loader)}\n'
+              f'lr: {optimizer.state_dict()["param_groups"][0]["lr"]:.8f}, ')
 
-    print('time elapsed: {:.3f}'.format(time.time() - start))
+
+        print('time elapsed: {:.3f}'.format(time.time() - start))
     del model
     writer.close()
 
