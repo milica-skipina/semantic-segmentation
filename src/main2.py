@@ -26,10 +26,10 @@ ROOT = '../'
 
 
 def prepare_data():
-    train_dataset = CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train')
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, drop_last=True)
-    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/val', '../data/raw/gtFine/val'),
-                             batch_size=2, shuffle=True, pin_memory=True, drop_last=False
+    train_dataset = CityscapesDataset('../data/raw/leftImg8bit/train', '../data/raw/gtFine/train', dataset_len=10, transform=True)
+    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, drop_last=False)
+    test_loader = DataLoader(CityscapesDataset('../data/raw/leftImg8bit/val', '../data/raw/gtFine/val', dataset_len=100, transform=True),
+                            batch_size=20, shuffle=True, pin_memory=True, drop_last=False
                              )
 
     return train_loader, test_loader
