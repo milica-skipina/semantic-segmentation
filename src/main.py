@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
+import torchvision.utils
 from torch import nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
@@ -17,10 +18,10 @@ from tqdm import tqdm
 
 from data_loader.cityscapes_dataset import CityscapesDataset
 from model.resnet import ResNet50
-
+from model.ae import ConvAutoencoder
 # seeds
-from src.model.convAutoencoder import ConvAutoencoder
 from src.model.inception import InceptionV3
+from src.model.ae import ConvAutoencoder
 from src.model.semanticSegmentation import SemanticSegmentationModel
 
 torch.backends.cudnn.benchmark = True
@@ -76,7 +77,8 @@ def init_model(is_autoencoder=False):
     #net = AutoEncoder(256, 256, 400)
     #
     if is_autoencoder:
-        net = ResNet50(out_classes=3, is_autoencoder=True)
+        #net = ResNet50(out_classes=3, is_autoencoder=True)
+        net = ConvAutoencoder()
     else:
         # encoder = ConvAutoencoder()
         # encoder = nn.DataParallel(encoder)
@@ -144,7 +146,8 @@ def run(args):
     lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.95, patience=50, min_lr=1e-7)
 
     if args.is_autoencoder:
-        criterion = VAELoss()
+        #criterion = VAELoss()
+        criterion = nn.MSELoss()
     else:
         #weight = torch.tensor([0.4, 0.4, 1, 1, 1])
         criterion = nn.CrossEntropyLoss(ignore_index=0)
@@ -168,8 +171,11 @@ def run(args):
             prepare_time = start_time - time.time()
             # FORWARD
             if args.is_autoencoder:
-                output, mu, logvar = model(img)
-                loss = criterion(img, output, mu, logvar)
+                #output, mu, logvar = model(img)
+                #torchvision.utils.save_image(output.data, f'{batch_idx}.png', nrow=args.batch_size, padding=2)
+                #loss = criterion(img, output, mu, logvar)
+                output = model(img)
+                loss = criterion(img, output)
             else:
                 output = model(img)
                 loss = criterion(output, gt.squeeze(dim=1))
@@ -208,7 +214,7 @@ def run(args):
                 ax1.imshow(img[idx].data.cpu().numpy().transpose(1, 2, 0))
                 ax2.imshow(gt[idx].data.cpu().numpy())
                 if args.is_autoencoder:
-                    ax3.imshow(torch.sigmoid(predictions[idx]).data.cpu().numpy().transpose(1, 2, 0))
+                    ax3.imshow(predictions[idx].data.cpu().numpy().transpose(1, 2, 0))
                 else:
                     ax3.imshow(predictions[idx])
                 plt.savefig(save_dir + '/images' + '/{}_{}.png'.format(epoch, idx))
@@ -217,13 +223,13 @@ def run(args):
                 figure = fig
             writer.add_figure('figure/min_train_loss', figure, epoch)
             #torch.save(model.module.state_dict(), save_dir + '/models/' + str(epoch) + '_best_ae_ever.pth')
-            checkpoint_path = save_dir + "/models/decoderCheckpoint.pth"
+            '''checkpoint_path = save_dir + "/models/decoderCheckpoint.pth"
             checkpoint = {
                 "epoch": epoch,
                 "model_state": model.state_dict(),
                 "optim_state": optimizer.state_dict()
             }
-            torch.save(checkpoint, checkpoint_path)
+            torch.save(checkpoint, checkpoint_path)'''
         if epoch % 20 == 0:
             model.eval()
             pbar = tqdm(enumerate(val_loader), total=len(val_loader))
@@ -234,8 +240,10 @@ def run(args):
                     gt = gt.to(DEVICE)
 
                     if args.is_autoencoder:
-                        output, mu, logvar = model(img)
-                        loss = criterion(img, output, mu, logvar)
+                        # output, mu, logvar = model(img)
+                        # loss = criterion(img, output, mu, logvar)
+                        output = model(img)
+                        loss = criterion(img, output)
                     else:
                         output = model(img)
                         loss = criterion(output, gt.squeeze(dim=1))
@@ -261,7 +269,7 @@ def run(args):
                     ax1.imshow(img[idx].data.cpu().numpy().transpose(1, 2, 0))
                     ax2.imshow(gt[idx].data.cpu().numpy())
                     if args.is_autoencoder:
-                        ax3.imshow(torch.sigmoid(predictions[idx]).data.cpu().numpy().transpose(1, 2, 0))
+                        ax3.imshow(predictions[idx].data.cpu().numpy().transpose(1, 2, 0))
                     else:
                         ax3.imshow(predictions[idx])
                     plt.savefig(save_dir + '/images' + '/{}_{}.png'.format(epoch, idx))
@@ -295,7 +303,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch-size', type=int, default=1)
     parser.add_argument('--optimizer-step-size', type=int, default=30)
     parser.add_argument('--optimizer-gamma', type=float, default=0.5)
-    parser.add_argument('--is-autoencoder', default=False, type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--is-autoencoder', default=True, type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     args = parser.parse_args()
     print(args)
 
