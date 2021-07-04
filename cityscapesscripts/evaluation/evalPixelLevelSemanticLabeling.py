@@ -696,8 +696,8 @@ def evaluatePair(predictionImgFileName, groundTruthImgFileName, confMatrix, inst
 
 # The main method
 def main():
-    os.environ['CITYSCAPES_RESULTS'] = '../../results'
-    os.environ['CITYSCAPES_DATASET'] = '../../data/raw'
+    os.environ['CITYSCAPES_RESULTS'] = '../../results/autoencoder'
+    os.environ['CITYSCAPES_DATASET'] = '../../data/processed/gtFine/val'
     global args
     argv = sys.argv[1:]
 

@@ -128,7 +128,7 @@ def getCatName(classId):
     if classId == 0:
         return 'void'
     elif classId == 1:
-        return 'falt'
+        return 'flat'
     elif classId == 2:
         return 'construction'
     elif classId == 3:
