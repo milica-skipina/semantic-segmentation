@@ -105,7 +105,8 @@ def getPrediction(args, groundTruthFile):
                 printError("Found multiple predictions for ground truth {}".format(groundTruthFile))
 
     if not predictionFile:
-        printError("Found no prediction for ground truth {}".format(groundTruthFile))
+        #printError("Found no prediction for ground truth {}".format(groundTruthFile))
+        return None
 
     return predictionFile
 
@@ -137,7 +138,7 @@ if 'CITYSCAPES_EXPORT_DIR' in os.environ:
 else:
     args.exportFile = os.path.join(args.cityscapesPath, "evaluationResults", "resultPixelLevelSemanticLabeling.json")
 # Parameters that should be modified by user
-args.groundTruthSearch = os.path.join(args.cityscapesPath, "data", "processed", "gtFine", "val", "*_gtFine_labelIds.png")
+args.groundTruthSearch = os.path.join(args.cityscapesPath, "data", "processed", "gtFine", "val", "*/*_gtFine_labelIds.png")
 
 # Remaining params
 args.evalInstLevelScore = False
@@ -502,10 +503,10 @@ def evaluateImgLists(predictionImgList, groundTruthImgList, args):
     for i in range(len(predictionImgList)):
         predictionImgFileName = predictionImgList[i]
         groundTruthImgFileName = groundTruthImgList[i]
-        fig, (ax1, ax2) = plt.subplots(1, 2)
+        '''fig, (ax1, ax2) = plt.subplots(1, 2)
         ax1.imshow(Image.open(groundTruthImgFileName))
         ax2.imshow(Image.open(predictionImgFileName))
-        plt.show()
+        plt.show()'''
 
         #print(groundTruthImgFileName)
         # print "Evaluate ", predictionImgFileName, "<>", groundTruthImgFileName
@@ -704,12 +705,13 @@ def evaluatePair(predictionImgFileName, groundTruthImgFileName, confMatrix, inst
         perImageStats[predictionImgFileName]["nbNotIgnoredPixels"] = np.count_nonzero(notIgnoredPixels)
         perImageStats[predictionImgFileName]["nbCorrectPixels"] = np.count_nonzero(erroneousPixels)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2)
+    '''fig, (ax1, ax2) = plt.subplots(1, 2)
     ax1.imshow(groundTruthNp)
     ax2.imshow(predictionNp)
-    plt.show()
+    plt.show()'''
 
-    score = jaccard_score(predictionNp.flatten(), groundTruthNp.flatten(), average='micro')
+    #score = jaccard_score(predictionNp.flatten(), groundTruthNp.flatten(), average='micro')
+    score = 0
     #intersection = np.logical_and(predictionNp, groundTruthNp)
     #union = np.logical_or(predictionNp, groundTruthNp)
     #score = np.sum(intersection) / np.sum(union)
@@ -719,8 +721,8 @@ def evaluatePair(predictionImgFileName, groundTruthImgFileName, confMatrix, inst
 
 # The main method
 def main():
-    os.environ['CITYSCAPES_RESULTS'] = '../../src/predictions/frankfurt'
-    os.environ['CITYSCAPES_DATASET'] = '../../data/processed/gtFine/val'
+    os.environ['CITYSCAPES_RESULTS'] = '../../src/predictions/'
+    os.environ['CITYSCAPES_DATASET'] = '../../'#'../../data/processed/gtFine/val/'
     global args
     argv = sys.argv[1:]
 
@@ -741,12 +743,16 @@ def main():
         if not groundTruthImgList:
             printError("Cannot find any ground truth images to use for evaluation. Searched for: {}".format(
                 args.groundTruthSearch))
-        # get the corresponding prediction for each ground truth imag
+        # get the corresponding prediction for each ground truth
+        groundTruthImgListFinal = []
         for gt in groundTruthImgList:
-            predictionImgList.append(getPrediction(args, gt))
+            pred_file = getPrediction(args, gt)
+            if pred_file:
+                predictionImgList.append(pred_file)
+                groundTruthImgListFinal.append(gt)
 
     # evaluate
-    evaluateImgLists(predictionImgList, groundTruthImgList, args)
+    evaluateImgLists(predictionImgList, groundTruthImgListFinal, args)
 
     return
 
