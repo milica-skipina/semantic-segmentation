@@ -41,11 +41,14 @@ def to_img(y):
 
 def load_model(model):
     if model == 'resnet':
-        model_path = '../models/resnet.pth'
-        loaded_model = torch.load(model_path)
+        print('resnet')
+        model_path = '../models/1_segnet.pth'
+        # loaded_model = torch.load(model_path)
         net = ResNet50(out_classes=8, is_autoencoder=False)
+        state_dict = torch.load(model_path, map_location=torch.device('cpu'))
+        net.load_state_dict(state_dict, strict=False)
         net = nn.DataParallel(net)
-        net.load_state_dict(loaded_model)
+        # net.load_state_dict(loaded_model)
         print('Model loaded.')
     elif model == 'inception':
         model_path = '../models/inception.pth'
@@ -91,7 +94,7 @@ def run(args):
 
     start = time.time()
 
-    save_dir = ROOT + 'results/autoencoder/'
+    save_dir = ROOT + 'results/resnet/'
     # for creating test dataset
     # save_dir = ROOT + 'data/processed/gtFine/val'
     if not os.path.exists(save_dir):
@@ -142,13 +145,11 @@ def run(args):
 
 
 if __name__ == '__main__':
-    os.environ['CITYSCAPES_RESULTS'] = '../../results'
-    os.environ['CITYSCAPES_DATASET'] = '../data/raw'
     torch.cuda.empty_cache()
 
     # ARGUMENT PARSING
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', default='autoencoder', type=str)
+    parser.add_argument('--model', default='resnet', type=str)
     args = parser.parse_args()
     print(args)
 

@@ -5,8 +5,13 @@ import torchvision.transforms as transforms
 import torch.nn.functional as F
 from torchvision.utils import make_grid
 import numpy as np
+from torch import nn
 from skimage import color
 from matplotlib import pyplot as plt
+
+from src.model.convAutoencoder import ConvAutoencoder
+from src.model.inception import InceptionV3
+from src.model.semanticSegmentation import SemanticSegmentationModel
 
 DEVICE = torch.device('cpu')
 
@@ -14,11 +19,30 @@ DEVICE = torch.device('cpu')
 def load_model(out_classes, path, model_type='resnet'):
     if model_type == 'resnet':
         model = ResNet50(out_classes=out_classes, is_autoencoder=False).to(DEVICE)
+        state_dict = torch.load(path, map_location=torch.device('cpu'))
+        model.load_state_dict(state_dict, strict=False)
+    elif model_type == 'inception':
+        model = InceptionV3(out_classes=out_classes)
+        model = nn.DataParallel(model)
+        model.to(DEVICE)
+        checkpoint_path = "/home/milica/Desktop/NN/reports/03_07_19_07/models/decoderCheckpoint.pth"
+
+        try:
+            loaded_checkpoint = torch.load(checkpoint_path)
+            model.load_state_dict(loaded_checkpoint['model_state'])
+        except:
+            print('error loading inception')
+    elif model_type == 'autoencoder':
+        loaded_model = torch.load(path)
+        encoder = ConvAutoencoder()
+        encoder = nn.DataParallel(encoder)
+        model = SemanticSegmentationModel(encoder.module.encoder)
+        model = nn.DataParallel(model)
+        model.load_state_dict(loaded_model['model_state'])
+        print('Model loaded.')
+        print('autoencoder')
     else:
         return 'Unsupported model type'
-
-    state_dict = torch.load(path, map_location=torch.device('cpu'))
-    model.load_state_dict(state_dict, strict=False)
 
     return model
 
@@ -81,7 +105,7 @@ def predict_from_image(model, image_path):
         ax2.imshow(prediction_grid)
         plt.show()
 
-        PIL_image = save_image(prediction_grid, f'predictions/{image_path}.png')
+        # PIL_image = save_image(prediction_grid, f'predictions/{image_path}.png')
 
         #result_image = color.label2rgb(PIL_image, image)
         #plt.imshow(result_image)
@@ -89,10 +113,16 @@ def predict_from_image(model, image_path):
 
 
 if __name__ == '__main__':
+    MODEL_PATH = '/home/milica/Desktop/NN/reports/03_07_19_07/models/decoderCheckpoint.pth'
     MODEL_PATH = '../models/1_segnet.pth'
-    model = load_model(out_classes=8, path=MODEL_PATH)
+    MODEL_PATH = '/home/milica/Desktop/NN/reports/03_07_10_20/decoderCheckpoint.pth'
+
+    model = load_model(out_classes=8, path=MODEL_PATH, model_type='autoencoder')
     model.eval()
 
-    predict_from_image(model, 'frankfurt_000001_070099_leftImg8bit.png')
+    predict_from_image(model, '../data/raw/leftImg8bit/val/frankfurt/frankfurt_000001_007285_leftImg8bit.png')
+    predict_from_image(model, '../data/raw/leftImg8bit/val/frankfurt/frankfurt_000001_010156_leftImg8bit.png')
+    predict_from_image(model, '../data/raw/leftImg8bit/val/frankfurt/frankfurt_000001_070099_leftImg8bit.png')
+    predict_from_image(model, '../data/raw/leftImg8bit/val/frankfurt/frankfurt_000000_000576_leftImg8bit.png')
 
 
