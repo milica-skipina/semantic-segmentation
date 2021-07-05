@@ -313,7 +313,10 @@ def getIouScoreForCategory(category, confMatrix, args):
     # All labels in this category
     labels = category2labels[category]
     # The IDs of all valid labels in this category
-    labelIds = [labels[0].categoryId]
+    if labels[0].categoryId == 0:
+        labelIds = None
+    else:
+        labelIds = [labels[0].categoryId]
     # If there are no valid labels, then return NaN
     if not labelIds:
         return float('nan')
