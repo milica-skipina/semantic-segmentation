@@ -26,6 +26,9 @@
 # python imports
 from __future__ import print_function, absolute_import, division
 
+import numpy as np
+from sklearn.metrics import jaccard_score
+from matplotlib import pyplot as plt
 import fnmatch
 import platform
 
@@ -249,7 +252,7 @@ def getIouScoreForLabel(label, confMatrix, args):
     # Only pixels that are not on a pixel with ground truth label that is ignored
     # The column sum of the corresponding column in the confusion matrix
     # without the ignored rows and without the actual label of interest
-    notIgnored = [l for l in args.evalLabels if not id2label[l].ignoreInEval and not l == label]
+    notIgnored = [l for l in args.evalLabels if not l == label]
     fp = np.longlong(confMatrix[notIgnored, label].sum())
 
     # the denominator of the IOU score
@@ -309,7 +312,7 @@ def getIouScoreForCategory(category, confMatrix, args):
     # All labels in this category
     labels = category2labels[category]
     # The IDs of all valid labels in this category
-    labelIds = [label.id for label in labels if not label.ignoreInEval and label.id in args.evalLabels]
+    labelIds = [labels[0].categoryId]
     # If there are no valid labels, then return NaN
     if not labelIds:
         return float('nan')
@@ -327,8 +330,7 @@ def getIouScoreForCategory(category, confMatrix, args):
     # the number of false positive pixels for this category
     # we count the column sum of all labels within this category
     # while skipping the rows of ignored labels and of labels within this category
-    notIgnoredAndNotInCategory = [l for l in args.evalLabels if
-                                  not id2label[l].ignoreInEval and id2label[l].category != category]
+    notIgnoredAndNotInCategory = [l for l in args.evalLabels if getCatName(l) != category]
     fp = np.longlong(confMatrix[notIgnoredAndNotInCategory, :][:, labelIds].sum())
 
     # the denominator of the IOU score
@@ -344,15 +346,16 @@ def getIouScoreForCategory(category, confMatrix, args):
 def getInstanceIouScoreForCategory(category, confMatrix, instStats, args):
     if not category in instStats["categories"]:
         return float('nan')
-    labelIds = instStats["categories"][category]["labelIds"]
-
+    # labelIds = instStats["categories"][category]["labelIds"]
+    #
     tp = instStats["categories"][category]["tpWeighted"]
     fn = instStats["categories"][category]["fnWeighted"]
+    labelIds = [0, 1, 2, 3, 4, 5, 6, 7]
 
     # the number of false positive pixels for this category
     # same as above
     notIgnoredAndNotInCategory = [l for l in args.evalLabels if
-                                  not id2label[l].ignoreInEval and id2label[l].category != category]
+                                  getCatName(l) != category]
     fp = np.longlong(confMatrix[notIgnoredAndNotInCategory, :][:, labelIds].sum())
 
     # the denominator of the IOU score
@@ -490,6 +493,7 @@ def evaluateImgLists(predictionImgList, groundTruthImgList, args):
     instStats = generateInstanceStats(args)
     perImageStats = {}
     nbPixels = 0
+    iou_score = 0
 
     if not args.quiet:
         print("Evaluating {} pairs of images...".format(len(predictionImgList)))
@@ -498,9 +502,17 @@ def evaluateImgLists(predictionImgList, groundTruthImgList, args):
     for i in range(len(predictionImgList)):
         predictionImgFileName = predictionImgList[i]
         groundTruthImgFileName = groundTruthImgList[i]
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        ax1.imshow(Image.open(groundTruthImgFileName))
+        ax2.imshow(Image.open(predictionImgFileName))
+        plt.show()
+
+        #print(groundTruthImgFileName)
         # print "Evaluate ", predictionImgFileName, "<>", groundTruthImgFileName
-        nbPixels += evaluatePair(predictionImgFileName, groundTruthImgFileName, confMatrix, instStats, perImageStats,
+        pixels, score =evaluatePair(predictionImgFileName, groundTruthImgFileName, confMatrix, instStats, perImageStats,
                                  args)
+        nbPixels += pixels
+        iou_score += score
 
         # sanity check
         if confMatrix.sum() != nbPixels:
@@ -514,6 +526,7 @@ def evaluateImgLists(predictionImgList, groundTruthImgList, args):
     if not args.quiet:
         print("\n")
 
+    print(f'IoU score is {iou_score/len(predictionImgList)}')
     # sanity check
     if confMatrix.sum() != nbPixels:
         printError(
@@ -559,21 +572,21 @@ def evaluateImgLists(predictionImgList, groundTruthImgList, args):
 
     # Calculate instance IOU scores on category level from matrix
     categoryInstScoreList = {}
-    # for category in category2labels.keys():
-    #     categoryInstScoreList[category] = getInstanceIouScoreForCategory(category, confMatrix, instStats, args)
+    for category in category2labels.keys():
+        categoryInstScoreList[category] = getInstanceIouScoreForCategory(category, confMatrix, instStats, args)
 
     # Print IOU scores
-    # if (not args.quiet):
-    #     print("")
-    #     printCategoryScores(categoryScoreList, categoryInstScoreList, args)
-    #     iouAvgStr = getColorEntry(getScoreAverage(categoryScoreList, args), args) + "{avg:5.3f}".format(
-    #         avg=getScoreAverage(categoryScoreList, args)) + args.nocol
-    #     niouAvgStr = getColorEntry(getScoreAverage(categoryInstScoreList, args), args) + "{avg:5.3f}".format(
-    #         avg=getScoreAverage(categoryInstScoreList, args)) + args.nocol
-    #     print("--------------------------------")
-    #     print("Score Average : " + iouAvgStr + "    " + niouAvgStr)
-    #     print("--------------------------------")
-    #     print("")
+    if (not args.quiet):
+        print("")
+        printCategoryScores(categoryScoreList, categoryInstScoreList, args)
+        iouAvgStr = getColorEntry(getScoreAverage(categoryScoreList, args), args) + "{avg:5.3f}".format(
+            avg=getScoreAverage(categoryScoreList, args)) + args.nocol
+        niouAvgStr = getColorEntry(getScoreAverage(categoryInstScoreList, args), args) + "{avg:5.3f}".format(
+            avg=getScoreAverage(categoryInstScoreList, args)) + args.nocol
+        print("--------------------------------")
+        print("Score Average : " + iouAvgStr + "    " + niouAvgStr)
+        print("--------------------------------")
+        print("")
 
     allResultsDict = createResultDict(confMatrix, classScoreList, classInstScoreList, categoryScoreList,
                                       categoryInstScoreList, perImageStats, args)
@@ -626,7 +639,7 @@ def evaluatePair(predictionImgFileName, groundTruthImgFileName, confMatrix, inst
         # using cython
         confMatrix = addToConfusionMatrix.cEvaluatePair(predictionNp, groundTruthNp, confMatrix, args.evalLabels)
     else:
-        # the slower python way 
+        # the slower python way
         encoding_value = max(groundTruthNp.max(), predictionNp.max()).astype(np.int32) + 1
         encoded = (groundTruthNp.astype(np.int32) * encoding_value) + predictionNp
 
@@ -691,12 +704,22 @@ def evaluatePair(predictionImgFileName, groundTruthImgFileName, confMatrix, inst
         perImageStats[predictionImgFileName]["nbNotIgnoredPixels"] = np.count_nonzero(notIgnoredPixels)
         perImageStats[predictionImgFileName]["nbCorrectPixels"] = np.count_nonzero(erroneousPixels)
 
-    return nbPixels
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.imshow(groundTruthNp)
+    ax2.imshow(predictionNp)
+    plt.show()
+
+    score = jaccard_score(predictionNp.flatten(), groundTruthNp.flatten(), average='micro')
+    #intersection = np.logical_and(predictionNp, groundTruthNp)
+    #union = np.logical_or(predictionNp, groundTruthNp)
+    #score = np.sum(intersection) / np.sum(union)
+
+    return nbPixels, score
 
 
 # The main method
 def main():
-    os.environ['CITYSCAPES_RESULTS'] = '../../results/autoencoder'
+    os.environ['CITYSCAPES_RESULTS'] = '../../src/predictions/frankfurt'
     os.environ['CITYSCAPES_DATASET'] = '../../data/processed/gtFine/val'
     global args
     argv = sys.argv[1:]

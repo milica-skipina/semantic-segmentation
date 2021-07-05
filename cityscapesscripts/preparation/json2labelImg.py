@@ -95,6 +95,11 @@ def createLabelImage(annotation, encoding, outline=None):
         if name2label[label].id < 0:
             continue
 
+        # ignore 255 trainIds
+        #if name2label[label].trainId == 255:
+        #    continue
+
+
         # If the category ID is not human, vehicle, object or road, that polygon should not be drawn
         #if name2label[label].categoryId not in [6, 7, 3, 1] or name2label[label].trainId == 255:
         #    continue
@@ -109,10 +114,6 @@ def createLabelImage(annotation, encoding, outline=None):
             val = name2label[label].categoryId
 
         try:
-            '''if val == 6:
-                val = 2
-            if val == 7:
-                val = 4'''
             if outline:
                 drawer.polygon(polygon, fill=val, outline=outline)
             else:
@@ -134,10 +135,14 @@ def json2labelImg(inJson,outImg,encoding=None):
     annotation = Annotation()
     annotation.fromJsonFile(inJson)
     labelImg   = createLabelImage( annotation , encoding )
-    from matplotlib import pyplot as plt
-    #plt.imshow(labelImg)
-    #plt.show()
-    labelImg.save( outImg )
+    labelImg.save(outImg)
+    '''rom matplotlib import pyplot as plt
+    fig = plt.figure(frameon=False)
+    plt.imshow(labelImg)
+    plt.show()
+    plt.imsave(outImg, labelImg)'''
+    #fig.savefig(outImg, bbox_inches='tight', pad_inches=0)
+    #labelImg.save( outImg )
 
 # The main method, if you execute this script directly
 # Reads the command line arguments and calls the method 'json2labelImg'
@@ -172,6 +177,16 @@ def main(argv):
     else:
         json2labelImg(inJson, outImg, type)
 
+
 # call the main method
 if __name__ == "__main__":
-    main(['../../data/raw/gtFine/train/tubingen/tubingen_000122_000019_gtFine_polygons.json', 'test.png', 'categoryId'])
+
+    for subdir, dirs, files in os.walk('../../data/raw/gtFine/val/'):
+        for file in files:
+            if 'polygons' in file:
+                abs_path = subdir + '/' + file
+                save_path = '../../data/processed/gtFine/val/' + subdir.split('/')[-1] + '/' + file.replace('polygons.json', 'labelIds.png')
+                print(abs_path, save_path)
+                main([abs_path, save_path, 'categoryId'])
+
+    #main(['../../data/raw/gtFine/train/aachen/aachen_000000_000019_gtFine_polygons.json', 'test.png', 'categoryId'])
